@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "picoquic_internal.h": "c",
+        "picoquic_packet_loop.h": "c"
+    }
+}

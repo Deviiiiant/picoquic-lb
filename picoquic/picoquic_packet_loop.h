@@ -47,6 +47,12 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
     picoquic_packet_loop_cb_fn loop_callback,
     void * loop_callback_ctx);
 
+int picoquic_packet_loop_open_sockets(int local_port, 
+int local_af, 
+SOCKET_TYPE * s_socket, 
+int * sock_af, 
+int nb_sockets_max); 
+
 #ifdef _WINDOWS
 int picoquic_packet_loop_win(picoquic_quic_t* quic,
     int local_port,
