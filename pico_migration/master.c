@@ -31,7 +31,7 @@ int picoquic_shallow_migrate(picoquic_quic_t* old_server, picoquic_quic_t* new_s
     return ret;
 }
 
-int master_packet_loop (picoquic_quic_t* quic,
+void master_packet_loop (picoquic_quic_t* quic,
     picoquic_quic_t** quic_back,
     struct hashmap_s* cnx_id_table,
     int** trans_flag,
@@ -212,7 +212,7 @@ int master_packet_loop (picoquic_quic_t* quic,
     }
 }
 
-int master(void* thread_para) {
+void master(void* thread_para) {
     master_thread_para_t* thread_context = (master_thread_para_t*) thread_para;
 
     picoquic_quic_t* quic = thread_context->quic;
