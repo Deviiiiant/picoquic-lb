@@ -46,7 +46,7 @@
 #include "migration.h"
 #include <pthread.h>
 #include "hashmap.h"
-#include <picoquic.h>
+#include "picoquic.h"
 
 int picoquic_sample_server_test_migration(int server_port, const char* server_cert, const char* server_key, const char* default_dir) {
     int ret = 0;
@@ -270,7 +270,7 @@ int get_port(char const* sample_name, char const* port_arg)
 int main(int argc, char** argv)
 {
     int exit_code = 0;
-    
+
     if (argc < 2) {
         usage(argv[0]);
     }
