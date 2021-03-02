@@ -260,16 +260,7 @@ int slave_packet_loop(picoquic_quic_t* quic,
     return ret;
 }
 
-void sample_server_delete_context_for_migration(sample_server_migration_ctx_t* server_ctx)
-{
-    /* Delete any remaining stream context */
-    while (server_ctx->first_stream != NULL) {
-        sample_server_delete_stream_context_for_migration(server_ctx, server_ctx->first_stream);
-    }
 
-    /* release the memory */
-    free(server_ctx);
-}
 
 void sample_server_delete_stream_context_for_migration(sample_server_migration_ctx_t* server_ctx, sample_server_stream_ctx_t* stream_ctx)
 {
@@ -295,6 +286,17 @@ void sample_server_delete_stream_context_for_migration(sample_server_migration_c
 
     /* release the memory */
     free(stream_ctx);
+}
+
+void sample_server_delete_context_for_migration(sample_server_migration_ctx_t* server_ctx)
+{
+    /* Delete any remaining stream context */
+    while (server_ctx->first_stream != NULL) {
+        sample_server_delete_stream_context_for_migration(server_ctx, server_ctx->first_stream);
+    }
+
+    /* release the memory */
+    free(server_ctx);
 }
 
 int sample_server_open_stream_for_migration(sample_server_migration_ctx_t* server_ctx, sample_server_stream_ctx_t* stream_ctx)
