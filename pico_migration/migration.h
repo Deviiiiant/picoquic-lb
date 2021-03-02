@@ -9,7 +9,6 @@
 #include <sys/socket.h>
 #include "picoquic_packet_loop.h"
 #include "hashmap.h"
-#include "quicctx.c"
 #include <pthread.h>
 
 #define CORE_NUMBER 1

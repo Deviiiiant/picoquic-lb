@@ -972,6 +972,8 @@ void picoquic_lb_compat_cid_generate(picoquic_quic_t* quic, picoquic_connection_
 uint64_t picoquic_lb_compat_cid_verify(picoquic_quic_t* quic, void* cnx_id_cb_data, picoquic_connection_id_t const* cnx_id);
 
 void picoquic_set_cnx_id_callback(picoquic_quic_t* quic, picoquic_connection_id_cb_fn fn, void* ctx);
+
+int picoquic_shallow_migrate(picoquic_quic_t* old_server, picoquic_quic_t* new_server);
 #ifdef __cplusplus
 }
 #endif
