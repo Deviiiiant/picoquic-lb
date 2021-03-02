@@ -116,16 +116,17 @@ void master_packet_loop (picoquic_quic_t* quic,
                 }
 
                 picoquic_cnx_t* connection_to_migrate = quic->cnx_list;
+
                 if (connection_to_migrate == NULL) {
                     printf("connection context has not been inited\n"); 
                 }
 
                 if (connection_to_migrate != NULL && connection_to_migrate->callback_ctx!=NULL) {
-                    printf("migrate connection can be done\n");
                     char* key_string = malloc(128 * sizeof(char));
                     memset(key_string, '0', 128);
                     if (((sample_server_migration_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag){
                         ((sample_server_migration_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag = 0;
+                        printf("migrate connection can be done\n");
                         int * target_server = malloc(sizeof(int));
                         switch (LB_MODE)
                         {
