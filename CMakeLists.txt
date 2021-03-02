@@ -218,13 +218,13 @@ target_link_libraries(picoquic_sample
 
 target_include_directories(picoquic_sample PRIVATE loglib picoquic)
 
-add_executable(pico_migration
+add_executable(migration
     pico_migration/main.c 
     pico_migration/master.c
     pico_migration/slave.c
 )
 
-target_link_libraries(pico_migration
+target_link_libraries(migration
     picoquic-log
     picoquic-core
     ${PTLS_LIBRARIES}
@@ -233,7 +233,7 @@ target_link_libraries(pico_migration
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
-target_include_directories(pico_migration PRIVATE loglib picoquic)
+target_include_directories(migration PRIVATE loglib picoquic)
 
 set(TEST_EXES picoquic_ct picohttp_ct)
 
