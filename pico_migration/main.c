@@ -43,7 +43,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <picosocks.h>
 #include "migration.h"
 #include <pthread.h>
 #include "hashmap.h"

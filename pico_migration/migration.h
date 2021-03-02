@@ -1,5 +1,4 @@
 
-#include "picoquic_internal.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <picoquic.h>

@@ -218,6 +218,23 @@ target_link_libraries(picoquic_sample
 
 target_include_directories(picoquic_sample PRIVATE loglib picoquic)
 
+add_executable(pico_migration
+    pico_migration/main.c 
+    pico_migration/master.c
+    pico_migration/slave.c
+)
+
+target_link_libraries(pico_migration
+    picoquic-log
+    picoquic-core
+    ${PTLS_LIBRARIES}
+    ${OPENSSL_LIBRARIES}
+    ${CMAKE_DL_LIBS}
+    ${CMAKE_THREAD_LIBS_INIT}
+)
+
+target_include_directories(pico_migration PRIVATE loglib picoquic)
+
 set(TEST_EXES picoquic_ct picohttp_ct)
 
 # get all project files for formatting
