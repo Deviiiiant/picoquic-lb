@@ -102,7 +102,7 @@ void master_packet_loop (picoquic_quic_t* quic,
 
         nb_loops++;
         if (nb_loops >= 100) {
-            loop_count_time = current_time;
+
             nb_loops = 0;
         }
 
