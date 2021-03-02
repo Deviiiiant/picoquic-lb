@@ -1,183 +1,5 @@
 #include "migration.h"
 
-int sample_server_migration_callback(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
-{
-    int ret = 0;
-    sample_server_migration_ctx_t* server_ctx= (sample_server_migration_ctx_t*)callback_ctx;
-    sample_server_stream_ctx_t* stream_ctx = (sample_server_stream_ctx_t*)v_stream_ctx;
-
-    if (callback_ctx == NULL || callback_ctx == picoquic_get_default_callback_context(picoquic_get_quic_ctx(cnx))) {
-        server_ctx = (sample_server_migration_ctx_t *)malloc(sizeof(sample_server_migration_ctx_t));
-        if (server_ctx == NULL) {
-            /* cannot handle the connection */
-            picoquic_close(cnx, PICOQUIC_ERROR_MEMORY);
-            return -1;
-        }
-        else {
-            sample_server_migration_ctx_t* d_ctx = (sample_server_migration_ctx_t*)picoquic_get_default_callback_context(picoquic_get_quic_ctx(cnx));
-            if (d_ctx != NULL) {
-                memcpy(server_ctx, d_ctx, sizeof(sample_server_migration_ctx_t));
-            }
-            else {
-                /* This really is an error case: the default connection context should never be NULL */
-                memset(server_ctx, 0, sizeof(sample_server_migration_ctx_t));
-                server_ctx->default_dir = "";
-            }
-            picoquic_set_callback(cnx, sample_server_migration_callback, server_ctx);
-        }
-    }
-
-    if (ret == 0) {
-        switch (fin_or_event) {
-        case picoquic_callback_stream_data:
-        case picoquic_callback_stream_fin:
-            /* Data arrival on stream #x, maybe with fin mark */
-            if (stream_ctx == NULL) {
-                /* Create and initialize stream context */
-                stream_ctx = sample_server_create_stream_context_for_migration(server_ctx, stream_id);
-            }
-
-            if (stream_ctx == NULL) {
-                /* Internal error */
-                (void) picoquic_reset_stream(cnx, stream_id, PICOQUIC_SAMPLE_INTERNAL_ERROR);
-                return(-1);
-            }
-            else if (stream_ctx->is_name_read) {
-                /* Write after fin? */
-                return(-1);
-            }
-            else {
-                /* Accumulate data */
-                size_t available = sizeof(stream_ctx->file_name) - stream_ctx->name_length - 1;
-
-                if (length > available) {
-                    /* Name too long: reset stream! */
-                    sample_server_delete_stream_context_for_migration(server_ctx, stream_ctx);
-                    (void) picoquic_reset_stream(cnx, stream_id, PICOQUIC_SAMPLE_NAME_TOO_LONG_ERROR);
-                }
-                else {
-                    if (length > 0) {
-                        memcpy(stream_ctx->file_name + stream_ctx->name_length, bytes, length);
-                        stream_ctx->name_length += length;
-                    }
-                    if (fin_or_event == picoquic_callback_stream_fin) {
-                        int stream_ret;
-
-                        /* If fin, mark read, check the file, open it. Or reset if there is no such file */
-                        stream_ctx->file_name[stream_ctx->name_length + 1] = 0;
-                        stream_ctx->is_name_read = 1;
-                        stream_ret = sample_server_open_stream_for_migration(server_ctx, stream_ctx);
-
-                        if (stream_ret == 0) {
-                            /* If data needs to be sent, set the context as active */
-                            ret = picoquic_mark_active_stream(cnx, stream_id, 1, stream_ctx);
-                        }
-                        else {
-                            /* If the file could not be read, reset the stream */
-                            sample_server_delete_stream_context_for_migration(server_ctx, stream_ctx);
-                            (void) picoquic_reset_stream(cnx, stream_id, stream_ret);
-                        }
-                    }
-                    // start the migraton here?
-                    
-                        if (server_ctx->server_flag) {
-                            memcpy(server_ctx->file_name, stream_ctx->file_name, 256*sizeof(uint8_t));
-                            // printf("FILE NAME IS %s\n", server_ctx->file_name);
-                            server_ctx->migration_flag = 1;
-                        /* code */
-                        }
-                }
-            }
-            break;
-        case picoquic_callback_prepare_to_send:
-            /* Active sending API */
-            if (stream_ctx == NULL) {
-                /* This should never happen */
-            }
-            else if (stream_ctx->F == NULL) {
-                /* Error, asking for data after end of file */
-            }
-            else {
-                /* Implement the zero copy callback */
-                size_t available = stream_ctx->file_length - stream_ctx->file_sent;
-                int is_fin = 1;
-                uint8_t* buffer;
-
-                if (available > length) {
-                    available = length;
-                    is_fin = 0;
-                }
-                
-                buffer = picoquic_provide_stream_data_buffer(bytes, available, is_fin, !is_fin);
-                if (buffer != NULL) {
-                    size_t nb_read = fread(buffer, 1, available, stream_ctx->F);
-
-                    if (nb_read != available) {
-                        /* Error while reading the file */
-                        sample_server_delete_stream_context_for_migration(server_ctx, stream_ctx);
-                        (void)picoquic_reset_stream(cnx, stream_id, PICOQUIC_SAMPLE_FILE_READ_ERROR);
-                    }
-                    else {
-                        stream_ctx->file_sent += available;
-                    }
-                }
-                else {
-                /* Should never happen according to callback spec. */
-                    ret = -1;
-                }
-            }
-            break;
-        case picoquic_callback_stream_reset: /* Client reset stream #x */
-        case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
-            if (stream_ctx != NULL) {
-                /* Mark stream as abandoned, close the file, etc. */
-                sample_server_delete_stream_context_for_migration(server_ctx, stream_ctx);
-                picoquic_reset_stream(cnx, stream_id, PICOQUIC_SAMPLE_FILE_CANCEL_ERROR);
-            }
-            break;
-        case picoquic_callback_stateless_reset: /* Received an error message */
-        case picoquic_callback_close: /* Received connection close */
-        case picoquic_callback_application_close: /* Received application close */
-            /* Delete the server application context */
-            sample_server_delete_context_for_migration(server_ctx);
-            picoquic_set_callback(cnx, NULL, NULL);
-            break;
-        case picoquic_callback_version_negotiation:
-            /* The server should never receive a version negotiation response */
-            break;
-        case picoquic_callback_stream_gap:
-            /* This callback is never used. */
-            break;
-        case picoquic_callback_almost_ready:
-            break;
-            // time to migrate
-            
-        case picoquic_callback_ready:
-            break;
-        default:
-            /* unexpected */
-            break;
-        }
-    }
-    return ret;
-}
-
-int slave (void* slave_para) {
-    slave_thread_para_t* thread_para = (slave_thread_para_t*) slave_para;
-    picoquic_quic_t* quic = thread_para->quic;
-    struct hashmap_s* cnx_id_table = thread_para->cnx_id_table;
-    int* trans_flag = thread_para->trans_flag;
-    trans_data_t trans_data = thread_para->shared_data;
-    pthread_cond_t* nonEmpty = thread_para->nonEmpty;
-    pthread_mutex_t* buffer_mutex = thread_para->buffer_mutex;
-    int server_port = thread_para->server_port;
-
-    printf("slave is here !!!!!!!"); 
-    slave_packet_loop(quic, thread_para->id,cnx_id_table, trans_flag, trans_data,nonEmpty ,buffer_mutex ,server_port, 0, 0, NULL, NULL);
-}
-
 int slave_packet_loop(picoquic_quic_t* quic,
     int id,
     struct hashmap_s* cnx_id_table,
@@ -443,4 +265,184 @@ int slave_packet_loop(picoquic_quic_t* quic,
     }
     return ret;
 }
+
+int sample_server_migration_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
+{
+    int ret = 0;
+    sample_server_migration_ctx_t* server_ctx= (sample_server_migration_ctx_t*)callback_ctx;
+    sample_server_stream_ctx_t* stream_ctx = (sample_server_stream_ctx_t*)v_stream_ctx;
+
+    if (callback_ctx == NULL || callback_ctx == picoquic_get_default_callback_context(picoquic_get_quic_ctx(cnx))) {
+        server_ctx = (sample_server_migration_ctx_t *)malloc(sizeof(sample_server_migration_ctx_t));
+        if (server_ctx == NULL) {
+            /* cannot handle the connection */
+            picoquic_close(cnx, PICOQUIC_ERROR_MEMORY);
+            return -1;
+        }
+        else {
+            sample_server_migration_ctx_t* d_ctx = (sample_server_migration_ctx_t*)picoquic_get_default_callback_context(picoquic_get_quic_ctx(cnx));
+            if (d_ctx != NULL) {
+                memcpy(server_ctx, d_ctx, sizeof(sample_server_migration_ctx_t));
+            }
+            else {
+                /* This really is an error case: the default connection context should never be NULL */
+                memset(server_ctx, 0, sizeof(sample_server_migration_ctx_t));
+                server_ctx->default_dir = "";
+            }
+            picoquic_set_callback(cnx, sample_server_migration_callback, server_ctx);
+        }
+    }
+
+    if (ret == 0) {
+        switch (fin_or_event) {
+        case picoquic_callback_stream_data:
+        case picoquic_callback_stream_fin:
+            /* Data arrival on stream #x, maybe with fin mark */
+            if (stream_ctx == NULL) {
+                /* Create and initialize stream context */
+                stream_ctx = sample_server_create_stream_context_for_migration(server_ctx, stream_id);
+            }
+
+            if (stream_ctx == NULL) {
+                /* Internal error */
+                (void) picoquic_reset_stream(cnx, stream_id, PICOQUIC_SAMPLE_INTERNAL_ERROR);
+                return(-1);
+            }
+            else if (stream_ctx->is_name_read) {
+                /* Write after fin? */
+                return(-1);
+            }
+            else {
+                /* Accumulate data */
+                size_t available = sizeof(stream_ctx->file_name) - stream_ctx->name_length - 1;
+
+                if (length > available) {
+                    /* Name too long: reset stream! */
+                    sample_server_delete_stream_context_for_migration(server_ctx, stream_ctx);
+                    (void) picoquic_reset_stream(cnx, stream_id, PICOQUIC_SAMPLE_NAME_TOO_LONG_ERROR);
+                }
+                else {
+                    if (length > 0) {
+                        memcpy(stream_ctx->file_name + stream_ctx->name_length, bytes, length);
+                        stream_ctx->name_length += length;
+                    }
+                    if (fin_or_event == picoquic_callback_stream_fin) {
+                        int stream_ret;
+
+                        /* If fin, mark read, check the file, open it. Or reset if there is no such file */
+                        stream_ctx->file_name[stream_ctx->name_length + 1] = 0;
+                        stream_ctx->is_name_read = 1;
+                        stream_ret = sample_server_open_stream_for_migration(server_ctx, stream_ctx);
+
+                        if (stream_ret == 0) {
+                            /* If data needs to be sent, set the context as active */
+                            ret = picoquic_mark_active_stream(cnx, stream_id, 1, stream_ctx);
+                        }
+                        else {
+                            /* If the file could not be read, reset the stream */
+                            sample_server_delete_stream_context_for_migration(server_ctx, stream_ctx);
+                            (void) picoquic_reset_stream(cnx, stream_id, stream_ret);
+                        }
+                    }
+                    // start the migraton here?
+                    
+                        if (server_ctx->server_flag) {
+                            memcpy(server_ctx->file_name, stream_ctx->file_name, 256*sizeof(uint8_t));
+                            // printf("FILE NAME IS %s\n", server_ctx->file_name);
+                            server_ctx->migration_flag = 1;
+                        /* code */
+                        }
+                }
+            }
+            break;
+        case picoquic_callback_prepare_to_send:
+            /* Active sending API */
+            if (stream_ctx == NULL) {
+                /* This should never happen */
+            }
+            else if (stream_ctx->F == NULL) {
+                /* Error, asking for data after end of file */
+            }
+            else {
+                /* Implement the zero copy callback */
+                size_t available = stream_ctx->file_length - stream_ctx->file_sent;
+                int is_fin = 1;
+                uint8_t* buffer;
+
+                if (available > length) {
+                    available = length;
+                    is_fin = 0;
+                }
+                
+                buffer = picoquic_provide_stream_data_buffer(bytes, available, is_fin, !is_fin);
+                if (buffer != NULL) {
+                    size_t nb_read = fread(buffer, 1, available, stream_ctx->F);
+
+                    if (nb_read != available) {
+                        /* Error while reading the file */
+                        sample_server_delete_stream_context_for_migration(server_ctx, stream_ctx);
+                        (void)picoquic_reset_stream(cnx, stream_id, PICOQUIC_SAMPLE_FILE_READ_ERROR);
+                    }
+                    else {
+                        stream_ctx->file_sent += available;
+                    }
+                }
+                else {
+                /* Should never happen according to callback spec. */
+                    ret = -1;
+                }
+            }
+            break;
+        case picoquic_callback_stream_reset: /* Client reset stream #x */
+        case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
+            if (stream_ctx != NULL) {
+                /* Mark stream as abandoned, close the file, etc. */
+                sample_server_delete_stream_context_for_migration(server_ctx, stream_ctx);
+                picoquic_reset_stream(cnx, stream_id, PICOQUIC_SAMPLE_FILE_CANCEL_ERROR);
+            }
+            break;
+        case picoquic_callback_stateless_reset: /* Received an error message */
+        case picoquic_callback_close: /* Received connection close */
+        case picoquic_callback_application_close: /* Received application close */
+            /* Delete the server application context */
+            sample_server_delete_context_for_migration(server_ctx);
+            picoquic_set_callback(cnx, NULL, NULL);
+            break;
+        case picoquic_callback_version_negotiation:
+            /* The server should never receive a version negotiation response */
+            break;
+        case picoquic_callback_stream_gap:
+            /* This callback is never used. */
+            break;
+        case picoquic_callback_almost_ready:
+            break;
+            // time to migrate
+            
+        case picoquic_callback_ready:
+            break;
+        default:
+            /* unexpected */
+            break;
+        }
+    }
+    return ret;
+}
+
+int slave (void* slave_para) {
+    slave_thread_para_t* thread_para = (slave_thread_para_t*) slave_para;
+    picoquic_quic_t* quic = thread_para->quic;
+    struct hashmap_s* cnx_id_table = thread_para->cnx_id_table;
+    int* trans_flag = thread_para->trans_flag;
+    trans_data_t trans_data = thread_para->shared_data;
+    pthread_cond_t* nonEmpty = thread_para->nonEmpty;
+    pthread_mutex_t* buffer_mutex = thread_para->buffer_mutex;
+    int server_port = thread_para->server_port;
+
+    printf("slave is here !!!!!!!"); 
+    slave_packet_loop(quic, thread_para->id,cnx_id_table, trans_flag, trans_data,nonEmpty ,buffer_mutex ,server_port, 0, 0, NULL, NULL);
+}
+
+
 

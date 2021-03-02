@@ -1,26 +1,6 @@
 
 #include "migration.h"
 
-int master(void* thread_para) {
-    master_thread_para_t* thread_context = (master_thread_para_t*) thread_para;
-
-    picoquic_quic_t* quic = thread_context->quic;
-    picoquic_quic_t** quic_back = thread_context->quic_back;
-    struct hashmap_s* cnx_id_table = thread_context->cnx_id_table;
-    int** trans_flag = thread_context->trans_flag;
-    trans_data_master_t trans_data = thread_context->shared_data;
-    pthread_cond_t* nonEmpty = thread_context->nonEmpty;
-    pthread_mutex_t* buffer_mutex = thread_context->buffer_mutex;
-    int server_port = thread_context->server_port;
-
-    printf("master is here!!!!!!!!!!!"); 
-
-    master_packet_loop(quic, quic_back, cnx_id_table, trans_flag, trans_data,nonEmpty ,buffer_mutex,server_port, 0, 0, NULL, NULL); 
-
-    printf("master quits!!!!!!!!!!!!!"); 
-
-}
-
 int master_packet_loop (picoquic_quic_t* quic,
     picoquic_quic_t** quic_back,
     struct hashmap_s* cnx_id_table,
@@ -214,3 +194,24 @@ int master_packet_loop (picoquic_quic_t* quic,
         }
     }
 }
+
+int master(void* thread_para) {
+    master_thread_para_t* thread_context = (master_thread_para_t*) thread_para;
+
+    picoquic_quic_t* quic = thread_context->quic;
+    picoquic_quic_t** quic_back = thread_context->quic_back;
+    struct hashmap_s* cnx_id_table = thread_context->cnx_id_table;
+    int** trans_flag = thread_context->trans_flag;
+    trans_data_master_t trans_data = thread_context->shared_data;
+    pthread_cond_t* nonEmpty = thread_context->nonEmpty;
+    pthread_mutex_t* buffer_mutex = thread_context->buffer_mutex;
+    int server_port = thread_context->server_port;
+
+    printf("master is here!!!!!!!!!!!"); 
+
+    master_packet_loop(quic, quic_back, cnx_id_table, trans_flag, trans_data,nonEmpty ,buffer_mutex,server_port, 0, 0, NULL, NULL); 
+
+    printf("master quits!!!!!!!!!!!!!"); 
+
+}
+

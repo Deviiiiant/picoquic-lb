@@ -187,19 +187,7 @@ int picoquic_sample_server_test_migration(int server_port, const char* server_ce
 
     if (ret == 0) {
         
-        // picohash_table* cnx_id_table = picohash_create((size_t)8 * 4, picoquic_cnx_id_hash, picoquic_cnx_id_compare);
-        // free(cnx_id_table);
-        // ret = picoquic_packet_loop(quic, server_port, 0, 0, NULL, NULL);
-        // ret = picoquic_packet_loop_with_migration_master(quic, quic_back, cnx_id_table, trans_flag, trans_buffer ,nonEmpty ,server_port, 0, 0, NULL, NULL);
-        // if migration finished we should use picoquic_packet_loop(q_back......)
         pthread_t thread[CORE_NUMBER+1];
-
-        // strcpy(source,"hello world!");
-        // buflen = strlen(source);
-        /* create 2 threads*/
-        /*
-        pthread_create(&thread[2], NULL, (void *)watch, &thread_id[2]);
-        */
         /* create one consumer and one producer */
         master_thread_para_t* master_para = malloc(sizeof(master_thread_para_t));
         master_para->quic = quic;
