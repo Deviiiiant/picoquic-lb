@@ -2,8 +2,6 @@
 #include "migration.h"
 
 
-
-
 void master_packet_loop (picoquic_quic_t* quic,
     picoquic_quic_t** quic_back,
     struct hashmap_s* cnx_id_table,
@@ -84,8 +82,8 @@ void master_packet_loop (picoquic_quic_t* quic,
         }
         else {
             uint16_t current_recv_port = socket_port;
-
             if (bytes_recv > 0) {
+                printf("master got packet\n"); 
                 /* track the local port value if not known yet */
                 if (socket_port == 0 && nb_sockets == 1) {
                     struct sockaddr_storage local_address;
@@ -118,8 +116,12 @@ void master_packet_loop (picoquic_quic_t* quic,
                 }
 
                 picoquic_cnx_t* connection_to_migrate = quic->cnx_list;
+                if (connection_to_migrate == NULL) {
+                    printf("connection context has not been inited\n"); 
+                }
 
                 if (connection_to_migrate != NULL && connection_to_migrate->callback_ctx!=NULL) {
+                    printf("migrate connection can be done\n");
                     char* key_string = malloc(128 * sizeof(char));
                     memset(key_string, '0', 128);
                     if (((sample_server_migration_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag){
@@ -143,6 +145,7 @@ void master_packet_loop (picoquic_quic_t* quic,
                             *target_server = 0;
                             break;
                         }
+
                         picoquic_shallow_migrate(quic, quic_back[*target_server]);
                         picoquic_addr_text((struct sockaddr *)&connection_to_migrate->path[0]->peer_addr, key_string, 128);
                         if (cnx_id_table != NULL) {
@@ -196,7 +199,7 @@ void master(void* thread_para) {
     pthread_mutex_t* buffer_mutex = thread_context->buffer_mutex;
     int server_port = thread_context->server_port;
 
-    printf("master is here!!!!!!!!!!!"); 
+    printf("master is here!!!!!!!!!!!\n"); 
 
     master_packet_loop(quic, quic_back, cnx_id_table, trans_flag, trans_data,nonEmpty ,buffer_mutex,server_port, 0, 0, NULL, NULL); 
 

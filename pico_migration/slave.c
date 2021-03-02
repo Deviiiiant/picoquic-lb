@@ -549,7 +549,7 @@ void slave (void* slave_para) {
     pthread_mutex_t* buffer_mutex = thread_para->buffer_mutex;
     int server_port = thread_para->server_port;
 
-    printf("slave is here !!!!!!!"); 
+    printf("slave is here !!!!!!!\n"); 
     slave_packet_loop(quic, thread_para->id,cnx_id_table, trans_flag, trans_data,nonEmpty ,buffer_mutex ,server_port, 0, 0, NULL, NULL);
 }
 

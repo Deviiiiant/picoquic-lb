@@ -149,7 +149,7 @@ int picoquic_sample_server_test_migration(int server_port, const char* server_ce
 
             picoquic_set_key_log_file_from_env(quic_back_server[i]);
             
-            printf("Build server 2 OK\n");
+            printf("Build slave 1 OK\n");
         }
         /* code */
     }
@@ -182,10 +182,9 @@ int picoquic_sample_server_test_migration(int server_port, const char* server_ce
 
         picoquic_set_key_log_file_from_env(quic);
 
-        printf("Build server 1 OK\n");
+        printf("Build master OK\n");
     }
 
-    if (ret == 0) {
         
         pthread_t thread[CORE_NUMBER+1];
         /* create one consumer and one producer */
@@ -213,19 +212,22 @@ int picoquic_sample_server_test_migration(int server_port, const char* server_ce
         master_para->shared_data.socket_mutex = &socket_mutex;
         master_para->server_port = server_port;
         
+        printf("configured thread paras\n");
         for (size_t i = 0; i < CORE_NUMBER; i++)
         {
             /* code */
+            printf("creating slave thread\n"); 
             pthread_create(&thread[i], NULL, (void *)slave, slave_para[i]);
         }
-        
+        printf("creating master thread\n");
         pthread_create(&thread[CORE_NUMBER], NULL, (void *)master, master_para);
 
-        for(int i = 0; i<CORE_NUMBER+1 ; i++)
+        for(int i = 0; i < CORE_NUMBER+1 ; i++)
         {
+            printf("threads join\n"); 
             pthread_join(thread[i], NULL);
         }
-    }
+
     printf("Server exit, ret = %d\n", ret);
 
     if (quic != NULL) {
