@@ -270,25 +270,9 @@ int get_port(char const* sample_name, char const* port_arg)
 int main(int argc, char** argv)
 {
     int exit_code = 0;
-#ifdef _WINDOWS
-    WSADATA wsaData = { 0 };
-    (void)WSA_START(MAKEWORD(2, 2), &wsaData);
-#endif
-
+    
     if (argc < 2) {
         usage(argv[0]);
-    }
-    else if (strcmp(argv[1], "client") == 0) {
-        if (argc < 6) {
-            usage(argv[0]);
-        }
-        else {
-            int server_port = get_port(argv[0], argv[3]);
-            char const** file_names = (char const **)(argv + 5);
-            int nb_files = argc - 5;
-
-            //exit_code = picoquic_sample_client(argv[2], server_port, argv[4], nb_files, file_names);
-        }
     }
     else if (strcmp(argv[1], "server") == 0) {
         if (argc < 5) {
