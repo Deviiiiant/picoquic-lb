@@ -94,7 +94,7 @@ typedef struct st_sample_server_migration_ctx_t {
     uint8_t file_name[256];
 } sample_server_migration_ctx_t;
 
-int master(void* thread_para); 
+void master(void* thread_para); 
 
 
 // slave staff 

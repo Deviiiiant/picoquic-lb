@@ -67,7 +67,6 @@ void master_packet_loop (picoquic_quic_t* quic,
     int if_index_to;
     uint8_t buffer[1536];
     int bytes_recv;
-    uint64_t loop_count_time = current_time;
     int nb_loops = 0;
     SOCKET_TYPE s_socket[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
     int sock_af[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
