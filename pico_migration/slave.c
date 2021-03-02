@@ -191,12 +191,6 @@ int slave_packet_loop(picoquic_quic_t* quic,
                     else {
                         picoquic_log_app_message(last_cnx, "Could not send message to AF_to=%d, AF_from=%d, if=%d, ret=%d, err=%d",
                             peer_addr.ss_family, local_addr.ss_family, if_index, sock_ret, sock_err);
-                        
-                        if (picoquic_socket_error_implies_unreachable(sock_err)) {
-                            picoquic_notify_destination_unreachable(last_cnx, current_time,
-                                (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
-                                sock_err);
-                        }
                     }
                 }
             } else {
@@ -264,6 +258,119 @@ int slave_packet_loop(picoquic_quic_t* quic,
         }
     }
     return ret;
+}
+
+void sample_server_delete_context_for_migration(sample_server_migration_ctx_t* server_ctx)
+{
+    /* Delete any remaining stream context */
+    while (server_ctx->first_stream != NULL) {
+        sample_server_delete_stream_context_for_migration(server_ctx, server_ctx->first_stream);
+    }
+
+    /* release the memory */
+    free(server_ctx);
+}
+
+void sample_server_delete_stream_context_for_migration(sample_server_migration_ctx_t* server_ctx, sample_server_stream_ctx_t* stream_ctx)
+{
+    /* Close the file if it was open */
+    if (stream_ctx->F != NULL) {
+        stream_ctx->F = picoquic_file_close(stream_ctx->F);
+    }
+
+    /* Remove the context from the server's list */
+    if (stream_ctx->previous_stream == NULL) {
+        server_ctx->first_stream = stream_ctx->next_stream;
+    }
+    else {
+        stream_ctx->previous_stream->next_stream = stream_ctx->next_stream;
+    }
+
+    if (stream_ctx->next_stream == NULL) {
+        server_ctx->last_stream = stream_ctx->previous_stream;
+    }
+    else {
+        stream_ctx->next_stream->previous_stream = stream_ctx->previous_stream;
+    }
+
+    /* release the memory */
+    free(stream_ctx);
+}
+
+int sample_server_open_stream_for_migration(sample_server_migration_ctx_t* server_ctx, sample_server_stream_ctx_t* stream_ctx)
+{
+    int ret = 0;
+    char file_path[1024];
+
+    /* Keep track that the full file name was acquired. */
+    stream_ctx->is_name_read = 1;
+
+    /* Verify the name, then try to open the file */
+    if (server_ctx->default_dir_len + stream_ctx->name_length + 1 > sizeof(file_path)) {
+        ret = PICOQUIC_SAMPLE_NAME_TOO_LONG_ERROR;
+    }
+    else {
+        /* Verify that the default path is empty of terminates with "/" or "\" depending on OS,
+         * and format the file path */
+        size_t dir_len = server_ctx->default_dir_len;
+        if (dir_len > 0) {
+            memcpy(file_path, server_ctx->default_dir, dir_len);
+            if (file_path[dir_len - 1] != PICOQUIC_FILE_SEPARATOR[0]) {
+                file_path[dir_len] = PICOQUIC_FILE_SEPARATOR[0];
+                dir_len++;
+            }
+        }
+        memcpy(file_path + dir_len, stream_ctx->file_name, stream_ctx->name_length);
+        file_path[dir_len + stream_ctx->name_length] = 0;
+
+        /* Use the picoquic_file_open API for portability to Windows and Linux */
+        stream_ctx->F = picoquic_file_open(file_path, "rb");
+
+        if (stream_ctx->F == NULL) {
+            ret = PICOQUIC_SAMPLE_NO_SUCH_FILE_ERROR;
+        }
+        else {
+            /* Assess the file size, as this is useful for data planning */
+            long sz;
+            fseek(stream_ctx->F, 0, SEEK_END);
+            sz = ftell(stream_ctx->F);
+
+            if (sz <= 0) {
+                stream_ctx->F = picoquic_file_close(stream_ctx->F);
+                ret = PICOQUIC_SAMPLE_FILE_READ_ERROR;
+            }
+            else {
+                stream_ctx->file_length = (size_t)sz;
+                fseek(stream_ctx->F, 0, SEEK_SET);
+                ret = 0;
+            }
+        }
+    }
+
+    return ret;
+}
+
+
+sample_server_stream_ctx_t * sample_server_create_stream_context_for_migration(sample_server_migration_ctx_t* server_ctx, uint64_t stream_id)
+{
+    sample_server_stream_ctx_t* stream_ctx = (sample_server_stream_ctx_t*)malloc(sizeof(sample_server_stream_ctx_t));
+
+    if (stream_ctx != NULL) {
+        memset(stream_ctx, 0, sizeof(sample_server_stream_ctx_t));
+
+        if (server_ctx->last_stream == NULL) {
+            server_ctx->last_stream = stream_ctx;
+            server_ctx->first_stream = stream_ctx;
+        }
+        else {
+            stream_ctx->previous_stream = server_ctx->last_stream;
+            server_ctx->last_stream->next_stream = stream_ctx;
+            server_ctx->last_stream = stream_ctx;
+        }
+        stream_ctx->stream_id = stream_id;
+    }
+
+    return stream_ctx;
 }
 
 int sample_server_migration_callback(picoquic_cnx_t* cnx,
@@ -430,7 +537,7 @@ int sample_server_migration_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
-int slave (void* slave_para) {
+void slave (void* slave_para) {
     slave_thread_para_t* thread_para = (slave_thread_para_t*) slave_para;
     picoquic_quic_t* quic = thread_para->quic;
     struct hashmap_s* cnx_id_table = thread_para->cnx_id_table;

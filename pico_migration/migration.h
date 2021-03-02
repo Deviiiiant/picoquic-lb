@@ -143,7 +143,7 @@ int sample_server_migration_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx); 
 
-int slave (void* slave_para); 
+void slave (void* slave_para); 
 
 
 
