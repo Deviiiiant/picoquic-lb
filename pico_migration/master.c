@@ -1,6 +1,36 @@
 
 #include "migration.h"
 
+
+int picoquic_shallow_migrate(picoquic_quic_t* old_server, picoquic_quic_t* new_server) {
+    int ret = 0;
+    // printf("time to migrate!\n");
+    //pick a connection to migrate
+    picoquic_cnx_t* connection_to_migrate = NULL;
+    //need to be changed in the future, for now just get one connection!
+    connection_to_migrate = old_server->cnx_list;
+    if(connection_to_migrate == NULL) {
+        printf("OMMMMMMMMMMMMMMMMG\n");
+    }
+    picoquic_remove_cnx_from_list(connection_to_migrate);
+    picoquic_remove_cnx_from_wake_list(connection_to_migrate);
+    //copy the data from the connection!
+    connection_to_migrate->quic = new_server;
+    picoquic_insert_cnx_in_list(new_server, connection_to_migrate);
+    // update the wake time
+    connection_to_migrate->next_wake_time = picoquic_get_quic_time(new_server);
+    picoquic_insert_cnx_by_wake_time(new_server, connection_to_migrate);
+    picoquic_local_cnxid_t* l_cid = connection_to_migrate->local_cnxid_first;
+
+    picoquic_register_cnx_id(new_server, connection_to_migrate, l_cid);
+
+/* Register or update default address and reset secret */
+    // picoquic_register_net_secret(cnx);
+    picoquic_register_net_icid(connection_to_migrate);
+    // printf("shallow copy finished here\n");
+    return ret;
+}
+
 int master_packet_loop (picoquic_quic_t* quic,
     picoquic_quic_t** quic_back,
     struct hashmap_s* cnx_id_table,
@@ -81,11 +111,6 @@ int master_packet_loop (picoquic_quic_t* quic,
             uint64_t loop_delta = current_time - loop_count_time;
 
             loop_count_time = current_time;
-            DBG_PRINTF("Looped %d times in %llu microsec, file: %d, line: %d\n",
-                nb_loops, (unsigned long long) loop_delta, quic->wake_file, quic->wake_line);
-            picoquic_log_context_free_app_message(quic, &log_cid, "Looped %d times in %llu microsec, file: %d, line: %d",
-                nb_loops, (unsigned long long) loop_delta, quic->wake_file, quic->wake_line);
-
             nb_loops = 0;
         }
 

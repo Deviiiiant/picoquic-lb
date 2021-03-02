@@ -8,6 +8,7 @@
 #include "picosocks.h"
 #include <sys/socket.h>
 #include "picoquic_packet_loop.h"
+#include "hashmap.h"
 
 #define CORE_NUMBER 1
 #define LB_MODE 1
