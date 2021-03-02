@@ -3,6 +3,7 @@
         "picoquic_internal.h": "c",
         "picoquic_packet_loop.h": "c",
         "pthread.h": "c",
-        "picoquic.h": "c"
+        "picoquic.h": "c",
+        "quicctx.c": "cpp"
     }
 }
