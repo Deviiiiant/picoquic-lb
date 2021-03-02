@@ -117,7 +117,7 @@ void master_packet_loop (picoquic_quic_t* quic,
                     ((struct sockaddr_in*) & addr_to)->sin_port = current_recv_port;
                 }
 
-                picoquic_cnx_t * connection_to_migrate = quic->cnx_list;
+                picoquic_cnx_t* connection_to_migrate = quic->cnx_list;
 
                 if (connection_to_migrate != NULL && connection_to_migrate->callback_ctx!=NULL) {
                     char* key_string = malloc(128 * sizeof(char));

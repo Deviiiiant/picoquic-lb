@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <picoquic.h>
+#include "picoquic_internal.h"
 #include <picosocks.h>
 #include <picoquic_utils.h>
 #include <autoqlog.h>
