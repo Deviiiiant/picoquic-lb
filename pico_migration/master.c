@@ -57,7 +57,6 @@ int master_packet_loop (picoquic_quic_t* quic,
 
     int** trans_sock_af = shared_data.trans_sock_af;
     int** trans_nb_sockets = shared_data.trans_nb_sockets;
-    pthread_mutex_t* socket_mutex = shared_data.socket_mutex;
 
     int server_number = 0;
     int ret = 0;
@@ -67,19 +66,15 @@ int master_packet_loop (picoquic_quic_t* quic,
     struct sockaddr_storage addr_to;
     int if_index_to;
     uint8_t buffer[1536];
-    uint8_t send_buffer[1536];
-    size_t send_length = 0;
     int bytes_recv;
     uint64_t loop_count_time = current_time;
     int nb_loops = 0;
-    picoquic_connection_id_t log_cid;
     SOCKET_TYPE s_socket[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
     int sock_af[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
     int nb_sockets = 0;
     uint16_t socket_port = (uint16_t)local_port;
     int testing_migration = 0; /* Hook for the migration test */
     uint16_t next_port = 0; /* Data for the migration test */
-    picoquic_cnx_t* last_cnx = NULL;
 
     memset(sock_af, 0, sizeof(sock_af));
 
@@ -108,8 +103,6 @@ int master_packet_loop (picoquic_quic_t* quic,
 
         nb_loops++;
         if (nb_loops >= 100) {
-            uint64_t loop_delta = current_time - loop_count_time;
-
             loop_count_time = current_time;
             nb_loops = 0;
         }
@@ -118,7 +111,6 @@ int master_packet_loop (picoquic_quic_t* quic,
             ret = -1;
         }
         else {
-            uint64_t loop_time = current_time;
             uint16_t current_recv_port = socket_port;
 
             if (bytes_recv > 0) {
