@@ -267,7 +267,7 @@ int master_packet_loop(picoquic_quic_t* quic,
                         sock_ret = picoquic_send_through_socket(send_socket,
                             (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                             (const char*)send_buffer, (int)send_length, &sock_err);
-                        // printf("sock_ret is %d\n", sock_ret);
+                        printf("sock_ret is %d\n", sock_ret);
                         pthread_mutex_unlock(socket_mutex);
                     }
                 }
