@@ -270,23 +270,6 @@ int master_packet_loop(picoquic_quic_t* quic,
                         // printf("sock_ret is %d\n", sock_ret);
                         pthread_mutex_unlock(socket_mutex);
                     }
-
-                    if (sock_ret <= 0) {
-                        if (last_cnx == NULL) {
-                            picoquic_log_context_free_app_message(quic, &log_cid, "Could not send message to AF_to=%d, AF_from=%d, if=%d, ret=%d, err=%d",
-                                peer_addr.ss_family, local_addr.ss_family, if_index, sock_ret, sock_err);
-                        }
-                        else {
-                            picoquic_log_app_message(last_cnx, "Could not send message to AF_to=%d, AF_from=%d, if=%d, ret=%d, err=%d",
-                                peer_addr.ss_family, local_addr.ss_family, if_index, sock_ret, sock_err);
-                            
-                            if (picoquic_socket_error_implies_unreachable(sock_err)) {
-                                picoquic_notify_destination_unreachable(last_cnx, current_time,
-                                    (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
-                                    sock_err);
-                            }
-                        }
-                    }
                 }
                 else {
                     break;
