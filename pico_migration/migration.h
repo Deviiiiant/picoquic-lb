@@ -12,7 +12,7 @@
 #include "hashmap.h"
 #include <pthread.h>
 
-#define CORE_NUMBER 1
+#define CORE_NUMBER 4
 #define LB_MODE 1
 #define ROUND_LB 1
 #define HASH_LB 2

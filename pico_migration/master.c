@@ -169,7 +169,7 @@ int master_packet_loop(picoquic_quic_t* quic,
                             *target_server = 0;
                             break;
                         }
-                        // printf("migrated to the back-up server %d!!\n", *target_server);
+                        printf("migrated to the back-up server %d!!\n", *target_server);
                         picoquic_shallow_migrate(quic, quic_back[*target_server]);
                         picoquic_addr_text((struct sockaddr *)&connection_to_migrate->path[0]->peer_addr, key_string, 128);
                         if (cnx_id_table != NULL) {
