@@ -11,7 +11,8 @@ int slave_packet_loop(picoquic_quic_t* quic,
     int local_af,
     int dest_if,
     picoquic_packet_loop_cb_fn loop_callback,
-    void* loop_callback_ctx) 
+    void* loop_callback_ctx, 
+    int thread_id) 
 {
     int* trans_bytes = shared_data.trans_bytes;
     uint8_t* trans_buffer = shared_data.trans_buffer;
@@ -180,6 +181,7 @@ int slave_packet_loop(picoquic_quic_t* quic,
                     sock_ret = picoquic_send_through_socket(send_socket,
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length, &sock_err);
+                    printf("slave id %d is sending %d bytes\n", id, sock_ret); 
                     pthread_mutex_unlock(socket_mutex);
                 }
 
@@ -547,7 +549,7 @@ void slave (void* slave_para) {
     int server_port = thread_para->server_port;
 
     printf("slave is here !!!!!!!\n"); 
-    slave_packet_loop(quic, thread_para->id,cnx_id_table, trans_flag, trans_data,nonEmpty ,buffer_mutex ,server_port, 0, 0, NULL, NULL);
+    slave_packet_loop(quic, thread_para->id,cnx_id_table, trans_flag, trans_data,nonEmpty ,buffer_mutex ,server_port, 0, 0, NULL, NULL, thread_para->id);
 }
 
 
