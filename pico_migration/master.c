@@ -168,18 +168,14 @@ int master_packet_loop(picoquic_quic_t* quic,
                             *target_server = 0;
                             break;
                         }
-                        printf("migrated to the back-up server %d!!\n", *target_server);
+                        printf("first migrated to the back-up server %d!!\n", *target_server);
                         picoquic_shallow_migrate(quic, quic_back[*target_server]);
                         picoquic_addr_text((struct sockaddr *)&connection_to_migrate->path[0]->peer_addr, key_string, 128);
                         if (cnx_id_table != NULL) {
-                            // printf("Add this migration connection to the hashmap!\n");
                             hashmap_put(cnx_id_table, key_string, 128, (void *)target_server);
                         } else {
-                            // printf("table is NULL\n");
                         }
-                        // printf("change quic!!!!!!!!!!!!!!!!!!!!!!!!!!!1\n");
                         *trans_flag[server_number] =1;
-                        // quic = quic_back;
                     }
                 }
 
@@ -204,7 +200,6 @@ int master_packet_loop(picoquic_quic_t* quic,
 
                 // check whether it belongs to this server
                 if (hashmap_get(cnx_id_table, key, 128) != NULL) {
-                    // printf("GET THE ELEMENT!\n");
                     void* const element = hashmap_get(cnx_id_table, key, 128);
                     int target_server_number = *((int *) element);
                     free(key);
@@ -223,7 +218,6 @@ int master_packet_loop(picoquic_quic_t* quic,
                     // then trigger the backup thread and return.
                     pthread_cond_signal(&nonEmpty[target_server_number]);
                     pthread_mutex_unlock(&buffer_mutex[target_server_number]);
-                    // printf("CONTINUE HERE\n");
                     continue;
                 }
                 /* Submit the packet to the server */
@@ -283,7 +277,6 @@ int master_packet_loop(picoquic_quic_t* quic,
                         sock_ret = picoquic_send_through_socket(send_socket,
                             (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                             (const char*)send_buffer, (int)send_length, &sock_err);
-                        printf("sock_ret is %d\n", sock_ret);
                         pthread_mutex_unlock(socket_mutex);
                     }
                 }

@@ -457,7 +457,6 @@ int sample_server_migration_callback(picoquic_cnx_t* cnx,
                     }
 
                     if (server_ctx->server_flag) {
-                        printf("set migration flag"); 
                         memcpy(server_ctx->file_name, stream_ctx->file_name, 256*sizeof(uint8_t));
                         server_ctx->migration_flag = 1;
                     }
