@@ -139,7 +139,6 @@ int master_packet_loop(picoquic_quic_t* quic,
                 // before the incoming packet function we need to check the packet.
                 // if the src port is in the hashmap we need to just continue
 
-                
                 picoquic_cnx_t * connection_to_migrate = quic->cnx_list;
                 if (connection_to_migrate != NULL && connection_to_migrate->callback_ctx!=NULL) {
                     char* key_string = malloc(128 * sizeof(char));
@@ -183,9 +182,26 @@ int master_packet_loop(picoquic_quic_t* quic,
                         // quic = quic_back;
                     }
                 }
+
+                /*trigger connection migration across slaves when receiving any incoming packet
+                1. modify the hashmap 
+                2. migrate connection state and callback context 
+                */
                 char* key = malloc(128 * sizeof(char));
                 memset(key, '0', 128);
                 picoquic_addr_text((struct sockaddr *)&addr_from, key, 128);
+                if (hashmap_get(cnx_id_table, key, 128) != NULL) {
+                    // locate the target server and direct to the next server 
+                    void* const element = hashmap_get(cnx_id_table, key, 128);
+                    int target_server_number = *((int *) element);
+                    int next_target_server_number = (target_server_number + 1) % CORE_NUMBER; 
+                    hashmap_put(cnx_id_table, key, 128, (void*) next_target_server_number); 
+                    // migrate connection context 
+                    picoquic_shallow_migrate(quic_back[target_server_number], quic_back[next_target_server_number]); 
+                    
+                }
+
+
                 // check whether it belongs to this server
                 if (hashmap_get(cnx_id_table, key, 128) != NULL) {
                     // printf("GET THE ELEMENT!\n");
