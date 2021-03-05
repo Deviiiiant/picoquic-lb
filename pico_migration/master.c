@@ -195,7 +195,7 @@ int master_packet_loop(picoquic_quic_t* quic,
                     void* const element = hashmap_get(cnx_id_table, key, 128);
                     int target_server_number = *((int *) element);
                     int next_target_server_number = (target_server_number + 1) % CORE_NUMBER; 
-                    hashmap_put(cnx_id_table, key, 128, (void*) next_target_server_number); 
+                    hashmap_put(cnx_id_table, key, 128, (void*) &next_target_server_number); 
                     // migrate connection context 
                     picoquic_shallow_migrate(quic_back[target_server_number], quic_back[next_target_server_number]); 
                     
