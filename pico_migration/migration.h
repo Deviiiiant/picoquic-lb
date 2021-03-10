@@ -35,9 +35,9 @@
 
 // common stream context 
 
-typedef struct st_sample_server_stream_ctx_t {
-    struct st_sample_server_stream_ctx_t* next_stream;
-    struct st_sample_server_stream_ctx_t* previous_stream;
+typedef struct st_stream_ctx_t {
+    struct st_stream_ctx_t* next_stream;
+    struct st_stream_ctx_t* previous_stream;
     uint64_t stream_id;
     FILE* F;
     uint8_t file_name[256];
@@ -47,9 +47,22 @@ typedef struct st_sample_server_stream_ctx_t {
     unsigned int is_name_read : 1;
     unsigned int is_stream_reset : 1;
     unsigned int is_stream_finished : 1;
-} sample_server_stream_ctx_t;
+} stream_ctx_t;
 
-// master staff 
+// app context 
+
+typedef struct st_app_ctx_t {
+    char const* default_dir;
+    size_t default_dir_len;
+    picoquic_quic_t* server_back;
+    sample_server_stream_ctx_t* first_stream;
+    sample_server_stream_ctx_t* last_stream;
+    int migration_flag;
+    int server_flag;
+    uint8_t file_name[256];
+} app_ctx_t;
+
+// dispatcher staff 
 
 typedef struct trans_data_master
 {
@@ -70,7 +83,7 @@ typedef struct trans_data_master
     int** trans_nb_sockets;
 }trans_data_master_t;
 
-typedef struct master_thread_para
+typedef struct st_dispatcher_thread_attr
 {
     picoquic_quic_t* quic;
     picoquic_quic_t** quic_back;
@@ -81,23 +94,14 @@ typedef struct master_thread_para
     pthread_mutex_t* buffer_mutex;
     int server_port;
     pthread_mutex_t* socket_mutex;
-}master_thread_para_t;
-
-typedef struct st_sample_server_migration_ctx_t {
-    char const* default_dir;
-    size_t default_dir_len;
-    picoquic_quic_t* server_back;
-    sample_server_stream_ctx_t* first_stream;
-    sample_server_stream_ctx_t* last_stream;
-    int migration_flag;
-    int server_flag;
-    uint8_t file_name[256];
-} sample_server_migration_ctx_t;
-
-void master(void* thread_para); 
+} dispatcher_thread_attr_t;
 
 
-// slave staff 
+
+void dispatcher (void* thread_para); 
+
+
+// worker staff 
 typedef struct trans_data
 {
     int* trans_bytes;
@@ -119,7 +123,7 @@ typedef struct trans_data
 
 }trans_data_t;
 
-typedef struct slave_thread_para
+typedef struct st_worker_thread_attr
 {
     int id;
     picoquic_quic_t* quic;
@@ -130,20 +134,13 @@ typedef struct slave_thread_para
     pthread_mutex_t* buffer_mutex;
     pthread_mutex_t* socket_mutex;
     int server_port;
-}slave_thread_para_t;
+} worker_thread_attr_t;
 
-typedef struct st_sample_server_ctx_t {
-    char const* default_dir;
-    size_t default_dir_len;
-    sample_server_stream_ctx_t* first_stream;
-    sample_server_stream_ctx_t* last_stream;
-} sample_server_ctx_t;
-
-int sample_server_migration_callback(picoquic_cnx_t* cnx,
+int stream_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx); 
 
-void slave (void* slave_para); 
+void worker (void* worker_attr); 
 
 
 
