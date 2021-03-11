@@ -48,10 +48,10 @@
 #include "hashmap.h"
 #include "picoquic.h"
 
-int picoquic_sample_server_test_migration(int server_port, const char* server_cert, const char* server_key, const char* default_dir) {
+int test_migration(int server_port, const char* server_cert, const char* server_key, const char* default_dir) {
     int ret = 0;
     picoquic_quic_t* quic = NULL;
-    picoquic_quic_t* quic_back_server[CORE_NUMBER] = {NULL};
+    picoquic_quic_t* worker_quic[CORE_NUMBER] = {NULL};
     char const* qlog_dir = PICOQUIC_SAMPLE_SERVER_QLOG_DIR;
     uint64_t current_time = 0;
 
@@ -73,7 +73,7 @@ int picoquic_sample_server_test_migration(int server_port, const char* server_ce
     int* trans_socket_rank[CORE_NUMBER] = {NULL};
     uint64_t* trans_current_time[CORE_NUMBER] = {NULL};
     unsigned char* trans_received_ecn[CORE_NUMBER] = {NULL};
-    slave_thread_para_t* slave_para[CORE_NUMBER] = {NULL};
+    worker_thread_attr_t* worker_attrs[CORE_NUMBER] = {NULL}; 
 
     struct hashmap_s hashmap;
     if (0 != hashmap_create(32, &hashmap)) {
@@ -101,60 +101,60 @@ int picoquic_sample_server_test_migration(int server_port, const char* server_ce
         trans_current_time[i] = malloc(sizeof(uint64_t));
         trans_received_ecn[i] = malloc(sizeof(unsigned char));
 
-        sample_server_migration_ctx_t* default_context = malloc(sizeof(sample_server_migration_ctx_t));
+        app_ctx_t* default_context = malloc(sizeof(app_ctx_t));
         default_context->default_dir = default_dir;
         default_context->default_dir_len = strlen(default_dir);
         default_context->migration_flag = 0;
         default_context->server_flag = 0;
-        quic_back_server[i] = picoquic_create(8, server_cert, server_key, NULL, PICOQUIC_SAMPLE_ALPN,
-        sample_server_migration_callback, default_context, NULL, NULL, NULL, current_time, NULL, NULL, NULL, 0);
+        worker_quic[i] = picoquic_create(8, server_cert, server_key, NULL, PICOQUIC_SAMPLE_ALPN,
+        stream_callback, default_context, NULL, NULL, NULL, current_time, NULL, NULL, NULL, 0);
 
-        slave_para[i] = malloc(sizeof(slave_thread_para_t));
-        slave_para[i]->id = i;
-        slave_para[i]->quic = quic_back_server[i];
-        slave_para[i]->cnx_id_table = cnx_id_table;
-        slave_para[i]->trans_flag = trans_flag[i];
-        slave_para[i]->shared_data.trans_buffer = trans_buffer[i];
-        slave_para[i]->shared_data.trans_send_buffer = trans_send_buffer[i];
-        slave_para[i]->shared_data.trans_bytes = trans_bytes[i];
-        slave_para[i]->shared_data.trans_received_ecn = trans_received_ecn[i];
-        slave_para[i]->shared_data.trans_addr_to = trans_addr_to[i];
-        slave_para[i]->shared_data.trans_addr_from = trans_addr_from[i];
-        slave_para[i]->shared_data.trans_peer_addr = trans_peer_addr[i];
-        slave_para[i]->shared_data.trans_local_addr = trans_local_addr[i];
-        slave_para[i]->shared_data.trans_if_index_to = trans_if_index_to[i];
-        slave_para[i]->shared_data.trans_current_time = trans_current_time[i];
-        slave_para[i]->shared_data.trans_socket_rank = trans_socket_rank[i];
-        slave_para[i]->shared_data.trans_s_socket = trans_s_socket[i];
-        slave_para[i]->shared_data.trans_sock_af = trans_sock_af[i];
-        slave_para[i]->shared_data.trans_nb_sockets = trans_nb_sockets[i];
-        slave_para[i]->nonEmpty = &nonEmpty_global[i];
-        slave_para[i]->buffer_mutex = &buffer_mutex_global[i];
-        slave_para[i]->server_port = server_port;
-        slave_para[i]->shared_data.socket_mutex = &socket_mutex;
+        worker_attrs[i] = malloc(sizeof(worker_thread_attr_t));
+        worker_attrs[i]->id = i;
+        worker_attrs[i]->quic = worker_quic[i];
+        worker_attrs[i]->cnx_id_table = cnx_id_table;
+        worker_attrs[i]->trans_flag = trans_flag[i];
+        worker_attrs[i]->shared_data.trans_buffer = trans_buffer[i];
+        worker_attrs[i]->shared_data.trans_send_buffer = trans_send_buffer[i];
+        worker_attrs[i]->shared_data.trans_bytes = trans_bytes[i];
+        worker_attrs[i]->shared_data.trans_received_ecn = trans_received_ecn[i];
+        worker_attrs[i]->shared_data.trans_addr_to = trans_addr_to[i];
+        worker_attrs[i]->shared_data.trans_addr_from = trans_addr_from[i];
+        worker_attrs[i]->shared_data.trans_peer_addr = trans_peer_addr[i];
+        worker_attrs[i]->shared_data.trans_local_addr = trans_local_addr[i];
+        worker_attrs[i]->shared_data.trans_if_index_to = trans_if_index_to[i];
+        worker_attrs[i]->shared_data.trans_current_time = trans_current_time[i];
+        worker_attrs[i]->shared_data.trans_socket_rank = trans_socket_rank[i];
+        worker_attrs[i]->shared_data.trans_s_socket = trans_s_socket[i];
+        worker_attrs[i]->shared_data.trans_sock_af = trans_sock_af[i];
+        worker_attrs[i]->shared_data.trans_nb_sockets = trans_nb_sockets[i];
+        worker_attrs[i]->nonEmpty = &nonEmpty_global[i];
+        worker_attrs[i]->buffer_mutex = &buffer_mutex_global[i];
+        worker_attrs[i]->server_port = server_port;
+        worker_attrs[i]->shared_data.socket_mutex = &socket_mutex;
 
 
-        if (quic_back_server[i] == NULL) {
+        if (worker_quic[i] == NULL) {
             fprintf(stderr, "Could not create server context\n");
             ret = -1;
         }
         else {
-            picoquic_set_cookie_mode(quic_back_server[i], 2);
+            picoquic_set_cookie_mode(worker_quic[i], 2);
 
-            picoquic_set_default_congestion_algorithm(quic_back_server[i], picoquic_bbr_algorithm);
+            picoquic_set_default_congestion_algorithm(worker_quic[i], picoquic_bbr_algorithm);
 
-            picoquic_set_qlog(quic_back_server[i], qlog_dir);
+            picoquic_set_qlog(worker_quic[i], qlog_dir);
 
-            picoquic_set_log_level(quic_back_server[i], 1);
+            picoquic_set_log_level(worker_quic[i], 1);
 
-            picoquic_set_key_log_file_from_env(quic_back_server[i]);
+            picoquic_set_key_log_file_from_env(worker_quic[i]);
             
             printf("Build slave 1 OK\n");
         }
         /* code */
     }
 
-    sample_server_migration_ctx_t default_migration_context = { 0 };
+    app_ctx_t default_migration_context = { 0 };
     default_migration_context.default_dir = default_dir;
     default_migration_context.default_dir_len = strlen(default_dir);
     default_migration_context.server_back = quic;
@@ -165,7 +165,7 @@ int picoquic_sample_server_test_migration(int server_port, const char* server_ce
     current_time = picoquic_current_time();
     /* Create QUIC context */
     quic = picoquic_create(8, server_cert, server_key, NULL, PICOQUIC_SAMPLE_ALPN,
-        sample_server_migration_callback, &default_migration_context, NULL, NULL, NULL, current_time, NULL, NULL, NULL, 0);
+        stream_callback, &default_migration_context, NULL, NULL, NULL, current_time, NULL, NULL, NULL, 0);
 
     if (quic == NULL) {
         fprintf(stderr, "Could not create server context\n");
@@ -182,45 +182,44 @@ int picoquic_sample_server_test_migration(int server_port, const char* server_ce
 
         picoquic_set_key_log_file_from_env(quic);
 
-        printf("Build master OK\n");
+        printf("Build dispatcher OK\n");
     }
 
         
         pthread_t thread[CORE_NUMBER+1];
         /* create one consumer and one producer */
-        master_thread_para_t* master_para = malloc(sizeof(master_thread_para_t));
-        master_para->quic = quic;
-        master_para->quic_back = quic_back_server;
-        master_para->cnx_id_table = cnx_id_table;
-        master_para->trans_flag = trans_flag;
-        master_para->shared_data.trans_buffer = trans_buffer;
-        master_para->shared_data.trans_send_buffer = trans_send_buffer;
-        master_para->shared_data.trans_bytes = trans_bytes;
-        master_para->shared_data.trans_received_ecn = trans_received_ecn;
-        master_para->shared_data.trans_addr_to = trans_addr_to;
-        master_para->shared_data.trans_addr_from = trans_addr_from;
-        master_para->shared_data.trans_peer_addr = trans_peer_addr;
-        master_para->shared_data.trans_local_addr = trans_local_addr;
-        master_para->shared_data.trans_if_index_to = trans_if_index_to;
-        master_para->shared_data.trans_current_time = trans_current_time;
-        master_para->shared_data.trans_socket_rank = trans_socket_rank;
-        master_para->shared_data.trans_s_socket = trans_s_socket;
-        master_para->shared_data.trans_sock_af = trans_sock_af;
-        master_para->shared_data.trans_nb_sockets = trans_nb_sockets;
-        master_para->nonEmpty = nonEmpty_global;
-        master_para->buffer_mutex = buffer_mutex_global;
-        master_para->shared_data.socket_mutex = &socket_mutex;
-        master_para->server_port = server_port;
+        dispatcher_thread_attr_t* dispatcher_attr = malloc(sizeof(dispatcher_thread_attr_t));
+        dispatcher_attr->quic = quic;
+        dispatcher_attr->quic_back = worker_quic;
+        dispatcher_attr->cnx_id_table = cnx_id_table;
+        dispatcher_attr->trans_flag = trans_flag;
+        dispatcher_attr->shared_data.trans_buffer = trans_buffer;
+        dispatcher_attr->shared_data.trans_send_buffer = trans_send_buffer;
+        dispatcher_attr->shared_data.trans_bytes = trans_bytes;
+        dispatcher_attr->shared_data.trans_received_ecn = trans_received_ecn;
+        dispatcher_attr->shared_data.trans_addr_to = trans_addr_to;
+        dispatcher_attr->shared_data.trans_addr_from = trans_addr_from;
+        dispatcher_attr->shared_data.trans_peer_addr = trans_peer_addr;
+        dispatcher_attr->shared_data.trans_local_addr = trans_local_addr;
+        dispatcher_attr->shared_data.trans_if_index_to = trans_if_index_to;
+        dispatcher_attr->shared_data.trans_current_time = trans_current_time;
+        dispatcher_attr->shared_data.trans_socket_rank = trans_socket_rank;
+        dispatcher_attr->shared_data.trans_s_socket = trans_s_socket;
+        dispatcher_attr->shared_data.trans_sock_af = trans_sock_af;
+        dispatcher_attr->shared_data.trans_nb_sockets = trans_nb_sockets;
+        dispatcher_attr->nonEmpty = nonEmpty_global;
+        dispatcher_attr->buffer_mutex = buffer_mutex_global;
+        dispatcher_attr->shared_data.socket_mutex = &socket_mutex;
+        dispatcher_attr->server_port = server_port;
         
         printf("configured thread paras\n");
         for (size_t i = 0; i < CORE_NUMBER; i++)
         {
-            /* code */
-            printf("creating slave thread\n"); 
-            pthread_create(&thread[i], NULL, (void *)slave, slave_para[i]);
+            printf("creating worker thread\n"); 
+            pthread_create(&thread[i], NULL, (void *)worker, worker_attrs[i]);
         }
-        printf("creating master thread\n");
-        pthread_create(&thread[CORE_NUMBER], NULL, (void *)master, master_para);
+        printf("creating dispatcher thread\n");
+        pthread_create(&thread[CORE_NUMBER], NULL, (void *)dispatcher, dispatcher_attr);
 
         for(int i = 0; i < CORE_NUMBER+1 ; i++)
         {
@@ -270,7 +269,7 @@ int main(int argc, char** argv)
         }
         else {
             int server_port = get_port(argv[0], argv[2]);
-            exit_code = picoquic_sample_server_test_migration(server_port, argv[3], argv[4], argv[5]);
+            exit_code = test_migration(server_port, argv[3], argv[4], argv[5]);
         }
     }
     else

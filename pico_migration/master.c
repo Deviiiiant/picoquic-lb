@@ -356,7 +356,7 @@ int master_packet_loop(picoquic_quic_t* quic,
 }
 
 void master(void* thread_para) {
-    master_thread_para_t* thread_context = (master_thread_para_t*) thread_para;
+    dispatcher_thread_attr_t* thread_context = (dispatcher_thread_attr_t*) thread_para;
 
     picoquic_quic_t* quic = thread_context->quic;
     picoquic_quic_t** quic_back = thread_context->quic_back;

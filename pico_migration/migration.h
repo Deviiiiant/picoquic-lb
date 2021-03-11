@@ -64,7 +64,7 @@ typedef struct st_app_ctx_t {
 
 // dispatcher staff 
 
-typedef struct trans_data_master
+typedef struct st_trans_data_dispatcher
 {
     int** trans_bytes;
     uint8_t** trans_buffer;
@@ -81,7 +81,7 @@ typedef struct trans_data_master
     int** trans_s_socket;
     int** trans_sock_af;
     int** trans_nb_sockets;
-}trans_data_master_t;
+}trans_data_dispatcher_t;
 
 typedef struct st_dispatcher_thread_attr
 {
@@ -89,7 +89,7 @@ typedef struct st_dispatcher_thread_attr
     picoquic_quic_t** quic_back;
     struct hashmap_s* cnx_id_table;
     int** trans_flag;
-    trans_data_master_t shared_data;
+    trans_data_dispatcher_t shared_data;
     pthread_cond_t* nonEmpty;
     pthread_mutex_t* buffer_mutex;
     int server_port;
@@ -97,8 +97,7 @@ typedef struct st_dispatcher_thread_attr
 } dispatcher_thread_attr_t;
 
 
-
-void dispatcher (void* thread_para); 
+void dispatcher (void* dispatcher_attr); 
 
 
 // worker staff 
