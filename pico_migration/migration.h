@@ -55,8 +55,8 @@ typedef struct st_app_ctx_t {
     char const* default_dir;
     size_t default_dir_len;
     picoquic_quic_t* server_back;
-    sample_server_stream_ctx_t* first_stream;
-    sample_server_stream_ctx_t* last_stream;
+    stream_ctx_t* first_stream;
+    stream_ctx_t* last_stream;
     int migration_flag;
     int server_flag;
     uint8_t file_name[256];
