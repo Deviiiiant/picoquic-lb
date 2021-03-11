@@ -86,7 +86,7 @@ typedef struct st_trans_data_dispatcher
 typedef struct st_dispatcher_thread_attr
 {
     picoquic_quic_t* quic;
-    picoquic_quic_t** quic_back;
+    picoquic_quic_t** worker_quic;
     struct hashmap_s* cnx_id_table;
     int** trans_flag;
     trans_data_dispatcher_t shared_data;
@@ -97,7 +97,7 @@ typedef struct st_dispatcher_thread_attr
 } dispatcher_thread_attr_t;
 
 
-void dispatcher (void* dispatcher_attr); 
+void dispatcher (void* dispatcher_thread_attr); 
 
 
 // worker staff 
@@ -139,7 +139,7 @@ int stream_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx); 
 
-void worker (void* worker_attr); 
+void worker (void* worker_thread_attr); 
 
 
 

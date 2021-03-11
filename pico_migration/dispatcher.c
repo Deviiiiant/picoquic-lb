@@ -2,11 +2,11 @@
 #include "migration.h"
 
 
-int master_packet_loop(picoquic_quic_t* quic,
+int dispatcher_packet_loop(picoquic_quic_t* quic,
     picoquic_quic_t** quic_back,
     struct hashmap_s* cnx_id_table,
     int** trans_flag,
-    trans_data_master_t shared_data,
+    trans_data_dispatcher_t shared_data,
     pthread_cond_t* nonEmpty,
     pthread_mutex_t* buffer_mutex,
     int local_port,
@@ -68,7 +68,6 @@ int master_packet_loop(picoquic_quic_t* quic,
     /* Wait for packets */
     /* TODO: add stopping condition, was && (!just_once || !connection_done) */
     while (ret == 0) {
-        // printf("MASTER WHILE 1\n");
         int socket_rank = -1;
         int64_t delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
         unsigned char received_ecn;
@@ -103,7 +102,6 @@ int master_packet_loop(picoquic_quic_t* quic,
             uint16_t current_recv_port = socket_port;
 
             if (bytes_recv > 0) {
-                // printf("MASTER RECEIVE PACKET\n");
                 /* track the local port value if not known yet */
                 if (socket_port == 0 && nb_sockets == 1) {
                     struct sockaddr_storage local_address;
@@ -144,8 +142,8 @@ int master_packet_loop(picoquic_quic_t* quic,
                     char* key_string = malloc(128 * sizeof(char));
                     memset(key_string, '0', 128);
                     // printf("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF\n");
-                    if (((sample_server_migration_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag){
-                        ((sample_server_migration_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag = 0;
+                    if (((app_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag){
+                        ((app_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag = 0;
                         int * target_server = malloc(sizeof(int));
                         switch (LB_MODE)
                         {
@@ -158,7 +156,7 @@ int master_packet_loop(picoquic_quic_t* quic,
                         }   
                         case FILE_LB:
                         {
-                            uint8_t* file_name = ((sample_server_migration_ctx_t *)(connection_to_migrate->callback_ctx))->file_name;
+                            uint8_t* file_name = ((app_ctx_t *)(connection_to_migrate->callback_ctx))->file_name;
                             // printf("File name is %s\n", (char *)file_name);
                             // printf("Name length is %ld\n", strlen((char *)file_name));
                             *target_server = atoi((char *)file_name);
@@ -232,7 +230,6 @@ int master_packet_loop(picoquic_quic_t* quic,
             }
 
             while (ret == 0) {
-                // printf("MASTER WHILE 2\n");
                 struct sockaddr_storage peer_addr;
                 struct sockaddr_storage local_addr;
             
@@ -244,7 +241,6 @@ int master_packet_loop(picoquic_quic_t* quic,
                 ret = picoquic_prepare_next_packet(quic, loop_time,
                     send_buffer, sizeof(send_buffer), &send_length,
                     &peer_addr, &local_addr, &if_index, &log_cid, &last_cnx);
-                    // printf("MASTER THREAD send length is %ld\n ", send_length);
 
                 if (ret == 0 && send_length > 0) {
                     SOCKET_TYPE send_socket = INVALID_SOCKET;
@@ -278,7 +274,7 @@ int master_packet_loop(picoquic_quic_t* quic,
                             (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                             (const char*)send_buffer, (int)send_length, &sock_err);
                         pthread_mutex_unlock(socket_mutex);
-                        printf("master is sending %d bytes", sock_ret); 
+                        printf("dispatcher is sending %d bytes", sock_ret); 
                     }
                 }
                 else {
@@ -355,23 +351,21 @@ int master_packet_loop(picoquic_quic_t* quic,
     return ret;
 }
 
-void master(void* thread_para) {
-    dispatcher_thread_attr_t* thread_context = (dispatcher_thread_attr_t*) thread_para;
+void dispatcher(void* dispatcher_thread_attr) {
+    dispatcher_thread_attr_t* dispatcher_attr = (dispatcher_thread_attr_t*) dispatcher_thread_attr;
 
-    picoquic_quic_t* quic = thread_context->quic;
-    picoquic_quic_t** quic_back = thread_context->quic_back;
-    struct hashmap_s* cnx_id_table = thread_context->cnx_id_table;
-    int** trans_flag = thread_context->trans_flag;
-    trans_data_master_t trans_data = thread_context->shared_data;
-    pthread_cond_t* nonEmpty = thread_context->nonEmpty;
-    pthread_mutex_t* buffer_mutex = thread_context->buffer_mutex;
-    int server_port = thread_context->server_port;
+    picoquic_quic_t* quic = dispatcher_attr->quic;
+    picoquic_quic_t** quic_back = dispatcher_attr->quic_back;
+    struct hashmap_s* cnx_id_table = dispatcher_attr->cnx_id_table;
+    int** trans_flag = dispatcher_attr->trans_flag;
+    trans_data_dispatcher_t trans_data = dispatcher_attr->shared_data;
+    pthread_cond_t* nonEmpty = dispatcher_attr->nonEmpty;
+    pthread_mutex_t* buffer_mutex = dispatcher_attr->buffer_mutex;
+    int server_port = dispatcher_attr->server_port;
 
-    printf("master is here!!!!!!!!!!!\n"); 
 
-    master_packet_loop(quic, quic_back, cnx_id_table, trans_flag, trans_data ,nonEmpty ,buffer_mutex,server_port, 0, 0, NULL, NULL); 
+    dispatcher_packet_loop(quic, quic_back, cnx_id_table, trans_flag, trans_data ,nonEmpty ,buffer_mutex,server_port, 0, 0, NULL, NULL); 
 
-    printf("master quits!!!!!!!!!!!!!"); 
 
 }
 

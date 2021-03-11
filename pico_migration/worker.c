@@ -1,6 +1,6 @@
 #include "migration.h"
 
-int slave_packet_loop(picoquic_quic_t* quic,
+int worker_packet_loop(picoquic_quic_t* quic,
     int id,
     struct hashmap_s* cnx_id_table,
     int* trans_flag,
@@ -181,7 +181,7 @@ int slave_packet_loop(picoquic_quic_t* quic,
                     sock_ret = picoquic_send_through_socket(send_socket,
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length, &sock_err);
-                    printf("slave id %d is sending %d bytes\n", id, sock_ret); 
+                    printf("worker id %d is sending %d bytes\n", id, sock_ret); 
                     pthread_mutex_unlock(socket_mutex);
                 }
 
@@ -264,7 +264,7 @@ int slave_packet_loop(picoquic_quic_t* quic,
 
 
 
-void sample_server_delete_stream_context_for_migration(sample_server_migration_ctx_t* server_ctx, sample_server_stream_ctx_t* stream_ctx)
+void sample_server_delete_stream_context_for_migration(app_ctx_t* server_ctx, stream_ctx_t* stream_ctx)
 {
     /* Close the file if it was open */
     if (stream_ctx->F != NULL) {
@@ -290,7 +290,7 @@ void sample_server_delete_stream_context_for_migration(sample_server_migration_c
     free(stream_ctx);
 }
 
-void sample_server_delete_context_for_migration(sample_server_migration_ctx_t* server_ctx)
+void sample_server_delete_context_for_migration(app_ctx_t* server_ctx)
 {
     /* Delete any remaining stream context */
     while (server_ctx->first_stream != NULL) {
@@ -301,7 +301,7 @@ void sample_server_delete_context_for_migration(sample_server_migration_ctx_t* s
     free(server_ctx);
 }
 
-int sample_server_open_stream_for_migration(sample_server_migration_ctx_t* server_ctx, sample_server_stream_ctx_t* stream_ctx)
+int sample_server_open_stream_for_migration(app_ctx_t* server_ctx, stream_ctx_t* stream_ctx)
 {
     int ret = 0;
     char file_path[1024];
@@ -355,12 +355,12 @@ int sample_server_open_stream_for_migration(sample_server_migration_ctx_t* serve
 }
 
 
-sample_server_stream_ctx_t * sample_server_create_stream_context_for_migration(sample_server_migration_ctx_t* server_ctx, uint64_t stream_id)
+stream_ctx_t * sample_server_create_stream_context_for_migration(app_ctx_t* server_ctx, uint64_t stream_id)
 {
-    sample_server_stream_ctx_t* stream_ctx = (sample_server_stream_ctx_t*)malloc(sizeof(sample_server_stream_ctx_t));
+    stream_ctx_t* stream_ctx = (stream_ctx_t*)malloc(sizeof(stream_ctx_t));
 
     if (stream_ctx != NULL) {
-        memset(stream_ctx, 0, sizeof(sample_server_stream_ctx_t));
+        memset(stream_ctx, 0, sizeof(stream_ctx_t));
 
         if (server_ctx->last_stream == NULL) {
             server_ctx->last_stream = stream_ctx;
@@ -377,32 +377,32 @@ sample_server_stream_ctx_t * sample_server_create_stream_context_for_migration(s
     return stream_ctx;
 }
 
-int sample_server_migration_callback(picoquic_cnx_t* cnx,
+int stream_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
 {
     int ret = 0;
-    sample_server_migration_ctx_t* server_ctx= (sample_server_migration_ctx_t*)callback_ctx;
-    sample_server_stream_ctx_t* stream_ctx = (sample_server_stream_ctx_t*)v_stream_ctx;
+    app_ctx_t* server_ctx= (app_ctx_t*)callback_ctx;
+    stream_ctx_t* stream_ctx = (stream_ctx_t*)v_stream_ctx;
 
     if (callback_ctx == NULL || callback_ctx == picoquic_get_default_callback_context(picoquic_get_quic_ctx(cnx))) {
-        server_ctx = (sample_server_migration_ctx_t *)malloc(sizeof(sample_server_migration_ctx_t));
+        server_ctx = (app_ctx_t *)malloc(sizeof(app_ctx_t));
         if (server_ctx == NULL) {
             /* cannot handle the connection */
             picoquic_close(cnx, PICOQUIC_ERROR_MEMORY);
             return -1;
         }
         else {
-            sample_server_migration_ctx_t* d_ctx = (sample_server_migration_ctx_t*)picoquic_get_default_callback_context(picoquic_get_quic_ctx(cnx));
+            app_ctx_t* d_ctx = (app_ctx_t*)picoquic_get_default_callback_context(picoquic_get_quic_ctx(cnx));
             if (d_ctx != NULL) {
-                memcpy(server_ctx, d_ctx, sizeof(sample_server_migration_ctx_t));
+                memcpy(server_ctx, d_ctx, sizeof(app_ctx_t));
             }
             else {
                 /* This really is an error case: the default connection context should never be NULL */
-                memset(server_ctx, 0, sizeof(sample_server_migration_ctx_t));
+                memset(server_ctx, 0, sizeof(app_ctx_t));
                 server_ctx->default_dir = "";
             }
-            picoquic_set_callback(cnx, sample_server_migration_callback, server_ctx);
+            picoquic_set_callback(cnx, stream_callback, server_ctx);
         }
     }
 
@@ -538,18 +538,17 @@ int sample_server_migration_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
-void slave (void* slave_para) {
-    slave_thread_para_t* thread_para = (slave_thread_para_t*) slave_para;
-    picoquic_quic_t* quic = thread_para->quic;
-    struct hashmap_s* cnx_id_table = thread_para->cnx_id_table;
-    int* trans_flag = thread_para->trans_flag;
-    trans_data_t trans_data = thread_para->shared_data;
-    pthread_cond_t* nonEmpty = thread_para->nonEmpty;
-    pthread_mutex_t* buffer_mutex = thread_para->buffer_mutex;
-    int server_port = thread_para->server_port;
+void worker(void* worker_thread_attr) {
+    worker_thread_attr_t* worker_attr = (worker_thread_attr_t*) worker_thread_attr;
+    picoquic_quic_t* quic = worker_attr->quic;
+    struct hashmap_s* cnx_id_table = worker_attr->cnx_id_table;
+    int* trans_flag = worker_attr->trans_flag;
+    trans_data_t trans_data = worker_attr->shared_data;
+    pthread_cond_t* nonEmpty = worker_attr->nonEmpty;
+    pthread_mutex_t* buffer_mutex = worker_attr->buffer_mutex;
+    int server_port = worker_attr->server_port;
 
-    printf("slave is here !!!!!!!\n"); 
-    slave_packet_loop(quic, thread_para->id,cnx_id_table, trans_flag, trans_data,nonEmpty ,buffer_mutex ,server_port, 0, 0, NULL, NULL, thread_para->id);
+    worker_packet_loop(quic, worker_attr->id,cnx_id_table, trans_flag, trans_data,nonEmpty ,buffer_mutex ,server_port, 0, 0, NULL, NULL, worker_attr->id);
 }
 
 

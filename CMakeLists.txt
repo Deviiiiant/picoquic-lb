@@ -220,8 +220,8 @@ target_include_directories(picoquic_sample PRIVATE loglib picoquic)
 
 add_executable(migration
     pico_migration/main.c 
-    pico_migration/master.c
-    pico_migration/slave.c
+    pico_migration/dispatcher.c
+    pico_migration/worker.c
 )
 
 target_link_libraries(migration

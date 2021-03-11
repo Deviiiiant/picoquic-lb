@@ -149,7 +149,7 @@ int test_migration(int server_port, const char* server_cert, const char* server_
 
             picoquic_set_key_log_file_from_env(worker_quic[i]);
             
-            printf("Build slave 1 OK\n");
+            printf("Build worker 1 OK\n");
         }
         /* code */
     }
@@ -190,7 +190,7 @@ int test_migration(int server_port, const char* server_cert, const char* server_
         /* create one consumer and one producer */
         dispatcher_thread_attr_t* dispatcher_attr = malloc(sizeof(dispatcher_thread_attr_t));
         dispatcher_attr->quic = quic;
-        dispatcher_attr->quic_back = worker_quic;
+        dispatcher_attr->worker_quic = worker_quic;
         dispatcher_attr->cnx_id_table = cnx_id_table;
         dispatcher_attr->trans_flag = trans_flag;
         dispatcher_attr->shared_data.trans_buffer = trans_buffer;
