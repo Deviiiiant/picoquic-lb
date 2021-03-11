@@ -3,7 +3,7 @@
 
 
 int dispatcher_packet_loop(picoquic_quic_t* quic,
-    picoquic_quic_t** quic_back,
+    picoquic_quic_t** worker_quic,
     struct hashmap_s* cnx_id_table,
     int** trans_flag,
     trans_data_dispatcher_t shared_data,
@@ -167,7 +167,7 @@ int dispatcher_packet_loop(picoquic_quic_t* quic,
                             break;
                         }
                         printf("first migrated to the back-up server %d!!\n", *target_server);
-                        picoquic_shallow_migrate(quic, quic_back[*target_server]);
+                        picoquic_shallow_migrate(quic, worker_quic[*target_server]);
                         picoquic_addr_text((struct sockaddr *)&connection_to_migrate->path[0]->peer_addr, key_string, 128);
                         if (cnx_id_table != NULL) {
                             hashmap_put(cnx_id_table, key_string, 128, (void *)target_server);
@@ -191,7 +191,7 @@ int dispatcher_packet_loop(picoquic_quic_t* quic,
                     int next_target_server_number = (target_server_number + 1) % CORE_NUMBER; 
                     hashmap_put(cnx_id_table, key, 128, (void*) &next_target_server_number); 
                     // migrate connection context 
-                    picoquic_shallow_migrate(quic_back[target_server_number], quic_back[next_target_server_number]); 
+                    picoquic_shallow_migrate(worker_quic[target_server_number], worker_quic[next_target_server_number]); 
                     
                 }
 
@@ -237,7 +237,7 @@ int dispatcher_packet_loop(picoquic_quic_t* quic,
                 int if_index = dest_if;
                 int sock_ret = 0;
                 int sock_err = 0;
-                // once the migration is done call quic = quic_back
+                // once the migration is done call quic = worker_quic
                 ret = picoquic_prepare_next_packet(quic, loop_time,
                     send_buffer, sizeof(send_buffer), &send_length,
                     &peer_addr, &local_addr, &if_index, &log_cid, &last_cnx);
@@ -355,7 +355,7 @@ void dispatcher(void* dispatcher_thread_attr) {
     dispatcher_thread_attr_t* dispatcher_attr = (dispatcher_thread_attr_t*) dispatcher_thread_attr;
 
     picoquic_quic_t* quic = dispatcher_attr->quic;
-    picoquic_quic_t** quic_back = dispatcher_attr->quic_back;
+    picoquic_quic_t** worker_quic = dispatcher_attr->worker_quic;
     struct hashmap_s* cnx_id_table = dispatcher_attr->cnx_id_table;
     int** trans_flag = dispatcher_attr->trans_flag;
     trans_data_dispatcher_t trans_data = dispatcher_attr->shared_data;
@@ -364,7 +364,7 @@ void dispatcher(void* dispatcher_thread_attr) {
     int server_port = dispatcher_attr->server_port;
 
 
-    dispatcher_packet_loop(quic, quic_back, cnx_id_table, trans_flag, trans_data ,nonEmpty ,buffer_mutex,server_port, 0, 0, NULL, NULL); 
+    dispatcher_packet_loop(quic, worker_quic, cnx_id_table, trans_flag, trans_data ,nonEmpty ,buffer_mutex,server_port, 0, 0, NULL, NULL); 
 
 
 }
