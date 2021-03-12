@@ -274,7 +274,11 @@ int dispatcher_packet_loop(picoquic_quic_t* quic,
                             (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                             (const char*)send_buffer, (int)send_length, &sock_err);
                         pthread_mutex_unlock(socket_mutex);
+<<<<<<< HEAD:pico_migration/dispatcher.c
                         printf("dispatcher is sending %d bytes", sock_ret); 
+=======
+                        printf("master is sending %ld bytes", sock_ret); 
+>>>>>>> parent of 0bd61ea4 (print thread id):pico_migration/master.c
                     }
                 }
                 else {
