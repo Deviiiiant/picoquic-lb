@@ -181,7 +181,10 @@ int worker_packet_loop(picoquic_quic_t* quic,
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length, &sock_err);
 <<<<<<< HEAD:pico_migration/worker.c
+<<<<<<< HEAD:pico_migration/worker.c
                     printf("worker id %d is sending %d bytes\n", id, sock_ret); 
+=======
+>>>>>>> parent of 0bd61ea4 (print thread id):pico_migration/slave.c
 =======
 >>>>>>> parent of 0bd61ea4 (print thread id):pico_migration/slave.c
                     pthread_mutex_unlock(socket_mutex);
@@ -565,6 +568,9 @@ void slave (void* slave_para) {
 
     printf("slave is here !!!!!!!\n"); 
     slave_packet_loop(quic, thread_para->id,cnx_id_table, trans_flag, trans_data,nonEmpty ,buffer_mutex ,server_port, 0, 0, NULL, NULL);
+<<<<<<< HEAD:pico_migration/worker.c
+>>>>>>> parent of 0bd61ea4 (print thread id):pico_migration/slave.c
+=======
 >>>>>>> parent of 0bd61ea4 (print thread id):pico_migration/slave.c
 }
 
