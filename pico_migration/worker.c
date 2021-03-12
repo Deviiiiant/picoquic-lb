@@ -11,7 +11,8 @@ int worker_packet_loop(picoquic_quic_t* quic,
     int local_af,
     int dest_if,
     picoquic_packet_loop_cb_fn loop_callback,
-    void* loop_callback_ctx) 
+    void* loop_callback_ctx, 
+    int thread_id) 
 {
     int* trans_bytes = shared_data.trans_bytes;
     uint8_t* trans_buffer = shared_data.trans_buffer;
@@ -180,13 +181,7 @@ int worker_packet_loop(picoquic_quic_t* quic,
                     sock_ret = picoquic_send_through_socket(send_socket,
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length, &sock_err);
-<<<<<<< HEAD:pico_migration/worker.c
-<<<<<<< HEAD:pico_migration/worker.c
                     printf("worker id %d is sending %d bytes\n", id, sock_ret); 
-=======
->>>>>>> parent of 0bd61ea4 (print thread id):pico_migration/slave.c
-=======
->>>>>>> parent of 0bd61ea4 (print thread id):pico_migration/slave.c
                     pthread_mutex_unlock(socket_mutex);
                 }
 
@@ -497,6 +492,7 @@ int stream_callback(picoquic_cnx_t* cnx,
                         /* Error while reading the file */
                         sample_server_delete_stream_context_for_migration(server_ctx, stream_ctx);
                         (void)picoquic_reset_stream(cnx, stream_id, PICOQUIC_SAMPLE_FILE_READ_ERROR);
+                        printf("reading file error\n"); 
                     }
                     else {
                         stream_ctx->file_sent += available;
@@ -543,7 +539,6 @@ int stream_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
-<<<<<<< HEAD:pico_migration/worker.c
 void worker(void* worker_thread_attr) {
     worker_thread_attr_t* worker_attr = (worker_thread_attr_t*) worker_thread_attr;
     picoquic_quic_t* quic = worker_attr->quic;
@@ -555,23 +550,6 @@ void worker(void* worker_thread_attr) {
     int server_port = worker_attr->server_port;
 
     worker_packet_loop(quic, worker_attr->id,cnx_id_table, trans_flag, trans_data,nonEmpty ,buffer_mutex ,server_port, 0, 0, NULL, NULL, worker_attr->id);
-=======
-void slave (void* slave_para) {
-    slave_thread_para_t* thread_para = (slave_thread_para_t*) slave_para;
-    picoquic_quic_t* quic = thread_para->quic;
-    struct hashmap_s* cnx_id_table = thread_para->cnx_id_table;
-    int* trans_flag = thread_para->trans_flag;
-    trans_data_t trans_data = thread_para->shared_data;
-    pthread_cond_t* nonEmpty = thread_para->nonEmpty;
-    pthread_mutex_t* buffer_mutex = thread_para->buffer_mutex;
-    int server_port = thread_para->server_port;
-
-    printf("slave is here !!!!!!!\n"); 
-    slave_packet_loop(quic, thread_para->id,cnx_id_table, trans_flag, trans_data,nonEmpty ,buffer_mutex ,server_port, 0, 0, NULL, NULL);
-<<<<<<< HEAD:pico_migration/worker.c
->>>>>>> parent of 0bd61ea4 (print thread id):pico_migration/slave.c
-=======
->>>>>>> parent of 0bd61ea4 (print thread id):pico_migration/slave.c
 }
 
 
