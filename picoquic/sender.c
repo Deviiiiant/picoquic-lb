@@ -648,11 +648,11 @@ static size_t picoquic_protect_packet(picoquic_cnx_t* cnx,
     }
 
     /* Encrypt the packet */
-    send_length = picoquic_aead_encrypt_generic(send_buffer + /* header_length */ h_length,
-        bytes + header_length, length - header_length,
-        sequence_number, send_buffer, /* header_length */ h_length, aead_context);
+    //send_length = picoquic_aead_encrypt_generic(send_buffer + /* header_length */ h_length,
+    //    bytes + header_length, length - header_length,
+    //    sequence_number, send_buffer, /* header_length */ h_length, aead_context);
 
-    send_length += /* header_length */ h_length;
+    send_length = /* header_length */ h_length + length - header_length;
 
     /* if needed, log the segment before header protection is applied */
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
