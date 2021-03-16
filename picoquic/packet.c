@@ -496,7 +496,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
             /* AEAD Decrypt, in place */
             //decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
             //    bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt);
-            decoded = ph->payload_length; 
+            decoded = ph->payload_length + 1; 
         }
         else if (ph->pn64 < cnx->crypto_rotation_sequence) {
             /* This packet claims to be encoded with the old key */
@@ -508,7 +508,7 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
             else if (cnx->crypto_context_old.aead_decrypt != NULL) {
                 //decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
                 //    bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context_old.aead_decrypt);
-                decoded = ph->payload_length; 
+                decoded = ph->payload_length + 1; 
             }
             else {
                 /* old context is either not yet available, or already removed */
@@ -562,8 +562,9 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
         /* TODO: get rid of handshake some time after handshake complete */
         /* For all the other epochs, there is a single crypto context and no key rotation */
         if (cnx->crypto_context[ph->epoch].aead_decrypt != NULL) {
-            decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
-                bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context[ph->epoch].aead_decrypt);
+            // decoded = picoquic_aead_decrypt_generic(bytes + ph->offset,
+            //     bytes + ph->offset, ph->payload_length, ph->pn64, bytes, ph->offset, cnx->crypto_context[ph->epoch].aead_decrypt);
+            decoded = ph->payload_length + 1; 
         }
         else {
             decoded = ph->payload_length + 1;
