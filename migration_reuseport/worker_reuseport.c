@@ -27,7 +27,7 @@ int open_sockets(int local_port, int local_af, SOCKET_TYPE * s_socket, int * soc
 
         if ((s_socket[i] = socket(sock_af[i], SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET ||
             picoquic_socket_set_ecn_options(s_socket[i], sock_af[i], &recv_set, &send_set) != 0 ||
-            picoquic_socket_set_pkt_info(s_socket[i], sock_af[i]) != 0 || setsockopt(s_socket[i], SOL_SOCKET, SO_REUSEPORT, &optval, size_t(optval)) != 0 || 
+            picoquic_socket_set_pkt_info(s_socket[i], sock_af[i]) != 0 || setsockopt(s_socket[i], SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)) != 0 || 
             (local_port != 0 && picoquic_bind_to_port(s_socket[i], sock_af[i], local_port) != 0)) {
             DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", sock_af[i], local_port);
             for (int j = 0; j < i; j++) {
@@ -67,8 +67,6 @@ int packet_loop(picoquic_quic_t* quic,
     int sock_af[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
     int nb_sockets = 0;
     uint16_t socket_port = (uint16_t)local_port;
-    int testing_migration = 0; /* Hook for the migration test */
-    uint16_t next_port = 0; /* Data for the migration test */
     picoquic_cnx_t* last_cnx = NULL;
 
     memset(sock_af, 0, sizeof(sock_af));
@@ -165,6 +163,7 @@ int packet_loop(picoquic_quic_t* quic,
                     sock_ret = picoquic_send_through_socket(send_socket,
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length, &sock_err);
+                    printf("socket return is %d\n", sock_ret); 
                 }
                 else {
                     break;

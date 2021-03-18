@@ -235,12 +235,12 @@ target_link_libraries(migration
 
 target_include_directories(migration PRIVATE loglib picoquic)
 
-add_executable(migrate_reuesport
-    migration_reuseport/migration_reuseport
-    migration_reuseport/worker_reuseport
+add_executable(reuesport_migration
+    migration_reuseport/migration_sample.c
+    migration_reuseport/worker_reuseport.c
 )
 
-target_link_libraries(migrate_reuesport
+target_link_libraries(reuesport_migration
     picoquic-log
     picoquic-core
     ${PTLS_LIBRARIES}
@@ -249,7 +249,7 @@ target_link_libraries(migrate_reuesport
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
-target_include_directories(migrate_reuesport PRIVATE loglib picoquic)
+target_include_directories(reuesport_migration PRIVATE loglib picoquic)
 
 set(TEST_EXES picoquic_ct picohttp_ct)
 

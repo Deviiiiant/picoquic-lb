@@ -1,5 +1,4 @@
 #include "migration_reuseport.h"
-#include "worker.c"
 
 int test_migration(int server_port, const char* server_cert, const char* server_key, const char* default_dir) { 
 
@@ -24,8 +23,6 @@ int test_migration(int server_port, const char* server_cert, const char* server_
 
     // create worker thread 
 
-
-
     for (size_t i = 0; i < CORE_NUMBER; i ++) { 
         // create app context 
         app_ctx_t* app_ctx = malloc(sizeof(app_ctx_t)); 
@@ -33,7 +30,7 @@ int test_migration(int server_port, const char* server_cert, const char* server_
         app_ctx->default_dir_len = strlen(default_dir); 
         worker_quic[i] = picoquic_create(8, server_cert, server_key, NULL, PICOQUIC_SAMPLE_ALPN,
         stream_callback, app_ctx, NULL, NULL, NULL, current_time, NULL, NULL, NULL, 0);
-        printf("create worker %d quic success\n", i); 
+        printf("create worker %ld quic success\n", i); 
         
         // create thread para
         worker_thread_paras[i] = malloc(sizeof(worker_thread_para_t)); 
@@ -51,7 +48,7 @@ int test_migration(int server_port, const char* server_cert, const char* server_
 
         // initialize thread 
         pthread_create(&thread[i], NULL, (void* ) worker, worker_thread_paras[i]); 
-        printf("create worker %d thread success\n", i); 
+        printf("create worker %ld thread success\n", i); 
     }
 
     for (int i = 0; i < CORE_NUMBER; i++) {
@@ -59,6 +56,7 @@ int test_migration(int server_port, const char* server_cert, const char* server_
     }
 
     printf("server exit\n"); 
+    return ret; 
 }
 
 static void usage(char const * sample_name)

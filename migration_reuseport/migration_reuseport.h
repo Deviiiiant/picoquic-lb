@@ -61,6 +61,12 @@ typedef struct st_app_ctx_t {
     uint8_t file_name[256];
 } app_ctx_t;
 
+// shared context
+typedef struct st_shared_context {
+    struct hashmap_s* cnx_table; 
+    picoquic_quic_t** worker_quic; 
+} shared_context_t; 
+
 // thread parameters
 typedef struct st_worker_thread_para {
     int id; 
@@ -69,12 +75,11 @@ typedef struct st_worker_thread_para {
     shared_context_t* shared_context; 
 } worker_thread_para_t; 
 
-// shared context
-typedef struct st_shared_context {
-    struct hashmap_s* cnx_table; 
-    picoquic_quic_t** worker_quic; 
-} shared_context_t; 
-
 // main function 
 void worker(void* thread_paras); 
+
+// stream callback function declartion
+int stream_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx); 
 
