@@ -48,7 +48,8 @@ int packet_loop(picoquic_quic_t* quic,
     int local_port,
     int local_af,
     int dest_if,
-    shared_context_t* shared_context) 
+    shared_context_t* shared_context, 
+    int id) 
 {
     int ret = 0;
     uint64_t current_time = picoquic_get_quic_time(quic);
@@ -71,7 +72,7 @@ int packet_loop(picoquic_quic_t* quic,
 
     memset(sock_af, 0, sizeof(sock_af));
 
-    if ((nb_sockets = picoquic_packet_loop_open_sockets(local_port, local_af, s_socket, sock_af, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
+    if ((nb_sockets = open_sockets(local_port, local_af, s_socket, sock_af, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
 
@@ -163,7 +164,7 @@ int packet_loop(picoquic_quic_t* quic,
                     sock_ret = picoquic_send_through_socket(send_socket,
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length, &sock_err);
-                    printf("socket return is %d\n", sock_ret); 
+                    printf("worker %d is sending %d bytes\n", id, sock_ret); 
                 }
                 else {
                     break;
@@ -464,6 +465,7 @@ void worker(void* worker_thread_attr) {
     picoquic_quic_t* quic = worker_thread_para->quic;
     shared_context_t* shared_context = worker_thread_para->shared_context; 
     int server_port = worker_thread_para->server_port;
+    int id = worker_thread_para->id; 
 
-    packet_loop(quic, server_port, 0, 0, shared_context); 
+    packet_loop(quic, server_port, 0, 0, shared_context, id); 
 }
