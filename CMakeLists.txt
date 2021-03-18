@@ -235,6 +235,22 @@ target_link_libraries(migration
 
 target_include_directories(migration PRIVATE loglib picoquic)
 
+add_executable(migrate_reuesport
+    migration_reuseport/migration_reuseport
+    migration_reuseport/worker_reuseport
+)
+
+target_link_libraries(migrate_reuesport
+    picoquic-log
+    picoquic-core
+    ${PTLS_LIBRARIES}
+    ${OPENSSL_LIBRARIES}
+    ${CMAKE_DL_LIBS}
+    ${CMAKE_THREAD_LIBS_INIT}
+)
+
+target_include_directories(migrate_reuesport PRIVATE loglib picoquic)
+
 set(TEST_EXES picoquic_ct picohttp_ct)
 
 # get all project files for formatting
