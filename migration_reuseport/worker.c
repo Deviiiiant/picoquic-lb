@@ -461,10 +461,10 @@ int stream_callback(picoquic_cnx_t* cnx,
 }
 
 void worker(void* worker_thread_attr) {
-    worker_thread_para_t* worker_para = (worker_thread_para*) worker_thread_attr;
-    picoquic_quic_t* quic = worker_attr->quic;
+    worker_thread_para_t* worker_thread_para = (worker_thread_para_t*) worker_thread_attr;
+    picoquic_quic_t* quic = worker_thread_para->quic;
     shared_context_t* shared_context = worker_thread_para->shared_context; 
-    int server_port = worker_attr->server_port;
+    int server_port = worker_thread_para->server_port;
 
     packet_loop(quic, server_port, 0, 0, shared_context); 
 }

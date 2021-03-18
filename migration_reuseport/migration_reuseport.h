@@ -12,6 +12,7 @@
 #include "hashmap.h"
 #include <pthread.h>
 
+
 #define CORE_NUMBER 4
 #define LB_MODE 1
 #define ROUND_LB 1
@@ -66,14 +67,14 @@ typedef struct st_worker_thread_para {
     picoquic_quic_t* quic; 
     int server_port; 
     shared_context_t* shared_context; 
-} worker_thread_para; 
+} worker_thread_para_t; 
 
 // shared context
 typedef struct st_shared_context {
-    struct hashmap_s* quic_table; 
-    struct hashmap_s* cnc_table; 
+    struct hashmap_s* cnx_table; 
+    picoquic_quic_t** worker_quic; 
 } shared_context_t; 
 
 // main function 
-int worker((void* ) thread_paras); 
+void worker(void* thread_paras); 
 
