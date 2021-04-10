@@ -12,6 +12,10 @@
 #include "hashmap.h"
 #include <pthread.h>
 
+#include <bpf/bpf.h>
+#include <bpf/libbpf.h>
+#include <linux/bpf.h>
+
 
 #define CORE_NUMBER 4
 #define LB_MODE 1
@@ -63,13 +67,15 @@ typedef struct st_app_ctx_t {
 
 // shared context
 typedef struct st_shared_context {
-    struct hashmap_s* cnx_table; 
+    // struct hashmap_s* cnx_table; 
+    int cntmap_fd; 
     picoquic_quic_t** worker_quic; 
 } shared_context_t; 
 
 // thread parameters
 typedef struct st_worker_thread_para {
     int id; 
+    int sock_fd; 
     picoquic_quic_t* quic; 
     int server_port; 
     shared_context_t* shared_context; 

@@ -49,7 +49,8 @@ int packet_loop(picoquic_quic_t* quic,
     int local_af,
     int dest_if,
     shared_context_t* shared_context, 
-    int id) 
+    int id, 
+    int sock_fd) 
 {
     int ret = 0;
     uint64_t current_time = picoquic_get_quic_time(quic);
@@ -64,9 +65,9 @@ int packet_loop(picoquic_quic_t* quic,
     uint64_t loop_count_time = current_time;
     int nb_loops = 0;
     picoquic_connection_id_t log_cid;
-    SOCKET_TYPE s_socket[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
+    SOCKET_TYPE s_socket[1] = {sock_fd};
     int sock_af[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
-    int nb_sockets = 0;
+    int nb_sockets = 1;
     uint16_t socket_port = (uint16_t)local_port;
     picoquic_cnx_t* last_cnx = NULL;
 
@@ -151,17 +152,18 @@ int packet_loop(picoquic_quic_t* quic,
                     &peer_addr, &local_addr, &if_index, &log_cid, &last_cnx);
 
                 if (ret == 0 && send_length > 0) {
-                    SOCKET_TYPE send_socket = INVALID_SOCKET;
-                    loop_count_time = current_time;
-                    nb_loops = 0;
-                    for (int i = 0; i < nb_sockets; i++) {
-                        if (sock_af[i] == peer_addr.ss_family) {
-                            send_socket = s_socket[i];
-                            break;
-                        }
-                    }
+                    
+                    // SOCKET_TYPE send_socket = INVALID_SOCKET;
+                    // loop_count_time = current_time;
+                    // nb_loops = 0;
+                    // for (int i = 0; i < nb_sockets; i++) {
+                    //     if (sock_af[i] == peer_addr.ss_family) {
+                    //         send_socket = s_socket[i];
+                    //         break;
+                    //     }
+                    // }
 
-                    sock_ret = picoquic_send_through_socket(send_socket,
+                    sock_ret = picoquic_send_through_socket(s_socket[0],
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length, &sock_err);
                     printf("worker %d is sending %d bytes\n", id, sock_ret); 
@@ -181,12 +183,12 @@ int packet_loop(picoquic_quic_t* quic,
     }
 
     /* Close the sockets */
-    for (int i = 0; i < nb_sockets; i++) {
-        if (s_socket[i] != INVALID_SOCKET) {
-            SOCKET_CLOSE(s_socket[i]);
-            s_socket[i] = INVALID_SOCKET;
-        }
-    }
+    // for (int i = 0; i < nb_sockets; i++) {
+    //     if (s_socket[i] != INVALID_SOCKET) {
+    //         SOCKET_CLOSE(s_socket[i]);
+    //         s_socket[i] = INVALID_SOCKET;
+    //     }
+    // }
 
     return ret;
 } 
@@ -466,6 +468,7 @@ void worker(void* worker_thread_attr) {
     shared_context_t* shared_context = worker_thread_para->shared_context; 
     int server_port = worker_thread_para->server_port;
     int id = worker_thread_para->id; 
+    int sock_fd = worker_thread_attr->sock_fd; 
 
-    packet_loop(quic, server_port, 0, 0, shared_context, id); 
+    packet_loop(quic, server_port, 0, 0, shared_context, id, sock_fd); 
 }
