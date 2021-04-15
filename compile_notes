@@ -1,0 +1,5 @@
+compile bpf : 
+    sudo clang-10 -target bpf -Wall -O2 -c bpf.c -o bpf.o -g 
+
+run migration server: 
+    salloc --nodelist=nslrack21,nslrack22 sudo -E LD_LIBRARY_PATH=/usr/lib64 ./reuesport_migration server 4433 certs/cert.pem certs/key.pem certs/

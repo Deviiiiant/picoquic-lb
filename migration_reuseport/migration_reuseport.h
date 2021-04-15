@@ -1,9 +1,11 @@
-
+#include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <picoquic.h>
 #include "picoquic_internal.h"
 #include <picosocks.h>
+#include <errno.h>
+#include <error.h>
 #include <picoquic_utils.h>
 #include <autoqlog.h>
 #include "picosocks.h"
@@ -15,6 +17,11 @@
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
 #include <linux/bpf.h>
+#include<stdio.h>   //printf
+#include<string.h> //memset
+#include<stdlib.h> //exit(0);
+
+
 
 
 #define CORE_NUMBER 4
@@ -75,7 +82,7 @@ typedef struct st_shared_context {
 // thread parameters
 typedef struct st_worker_thread_para {
     int id; 
-    int sock_fd; 
+    int* sock_fd_arr; 
     picoquic_quic_t* quic; 
     int server_port; 
     shared_context_t* shared_context; 

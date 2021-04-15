@@ -101,8 +101,6 @@ set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
 )
 
-
-
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(PTLS REQUIRED)
 message(STATUS "picotls/include: ${PTLS_INCLUDE_DIRS}" )
@@ -113,6 +111,7 @@ message(STATUS "root: ${OPENSSL_ROOT_DIR}")
 message(STATUS "OpenSSL_VERSION: ${OPENSSL_VERSION}")
 message(STATUS "OpenSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
 message(STATUS "OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
+
 
 include_directories(picoquic picoquictest
     ${PTLS_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
@@ -143,6 +142,7 @@ add_executable(picoquicdemo
     picoquicfirst/picoquicdemo.c
     picoquicfirst/getopt.c
 )
+
 
 target_link_libraries(picoquicdemo
     picoquic-log
@@ -242,9 +242,11 @@ add_executable(reuesport_migration
     migration_reuseport/worker_reuseport.c
 )
 
+
 target_link_libraries(reuesport_migration
     picoquic-log
     picoquic-core
+    bpf
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     ${CMAKE_DL_LIBS}

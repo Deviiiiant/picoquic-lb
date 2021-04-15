@@ -1,16 +1,20 @@
 #include "migration_reuseport.h"
+#include <bpf/bpf.h>
+#include <bpf/libbpf.h>
+#include <linux/bpf.h>
 
-int open_socket(int local_port) {
+int open_socket(int local_port, int sock_af) {
     int recv_set = 0;
     int send_set = 0;
     int optval = 1; 
 
-    int sock_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP); 
+    int sock_fd = socket(sock_af, SOCK_DGRAM, IPPROTO_UDP); 
+
     assert(sock_fd > -1); 
-    picoquic_socket_set_ecn_options(sock_fd, AF_INET, &recv_set, &send_set); 
-    picoquic_socket_set_pkt_info(sock_fd, AF_INET); 
+    picoquic_socket_set_ecn_options(sock_fd, sock_af, &recv_set, &send_set); 
+    picoquic_socket_set_pkt_info(sock_fd, sock_af); 
     setsockopt(sock_fd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)); 
-    picoquic_bind_to_port(sock_fd, AF_INET, local_port); 
+    picoquic_bind_to_port(sock_fd, sock_af, local_port);
 
     return sock_fd; 
 }
@@ -25,7 +29,7 @@ int test_migration(int server_port, const char* server_cert, const char* server_
     struct bpf_prog_load_attr prog_load_attr= {0};
     prog_load_attr.prog_type = BPF_PROG_TYPE_SK_REUSEPORT;
     prog_load_attr.file = "bpf.o";
-    int err; 
+    // int err; 
     struct bpf_object* obj;
 
     //1. load the bpf prog 
@@ -54,7 +58,6 @@ int test_migration(int server_port, const char* server_cert, const char* server_
     cntmap_fd = bpf_map__fd(cntmap); 
     assert(cntmap_fd > -1); 
 
-
     int ret = 0; 
     picoquic_quic_t* worker_quic[CORE_NUMBER] = {NULL}; 
     char const* qlog_dir = PICOQUIC_SAMPLE_SERVER_QLOG_DIR;
@@ -68,7 +71,7 @@ int test_migration(int server_port, const char* server_cert, const char* server_
     shared_context->worker_quic = worker_quic; 
 
     // create worker thread 
-
+    int sock_fd_arr[2] = {}; 
     for (size_t i = 0; i < CORE_NUMBER; i ++) { 
         // create app context 
         app_ctx_t* app_ctx = malloc(sizeof(app_ctx_t)); 
@@ -81,21 +84,30 @@ int test_migration(int server_port, const char* server_cert, const char* server_
         // create thread para
         worker_thread_paras[i] = malloc(sizeof(worker_thread_para_t)); 
         worker_thread_paras[i]->id = i; 
-        worker_thread_paras[i]->sock_fd = open_socket(server_port); 
         worker_thread_paras[i]->quic = worker_quic[i]; 
         worker_thread_paras[i]->server_port = server_port; 
         worker_thread_paras[i]->shared_context = shared_context; 
 
+        sock_fd_arr[0] = open_socket(server_port, AF_INET); 
+        // printf("sock fd is %d\n", sock_fd_arr[0]); 
+        sock_fd_arr[1] = open_socket(server_port, AF_INET6); 
+        // printf("sock fd is %d\n", sock_fd_arr[1]); 
+        worker_thread_paras[i]->sock_fd_arr = sock_fd_arr; 
+
         // bind socket to bpf prog 
-        if (i == 0) {
-            ret = setsockopt(worker_thread_paras[i]->sock_fd, SOL_SOCKET, SO_ATTACH_REUSEPORT_EBPF, &prog_fd, sizeof(prog_fd)); 
-            if (ret == 0) printf("bind socket %d to ebpf prog success\n", i); 
-        }
+        // if (i == 0) {
+        //     ret = setsockopt(sock_fd_arr[0], SOL_SOCKET, SO_ATTACH_REUSEPORT_EBPF, &prog_fd, sizeof(prog_fd)); 
+        //     if (ret == 0) printf("bind socket %ld to ebpf prog success\n", i); 
+        // }
 
         // update sockmap 
-        ret = bpf_map_update_elem(sockmap_fd, &i, &(worker_thread_paras[i]->sock_fd), BPF_NOEXIST);
-        printf("update sockmap ret is %d\n", ret); 
-        if (ret == -1) printf("errno is %s\n", strerror(errno)); 
+        // ret = bpf_map_update_elem(sockmap_fd, &i, &(sock_fd_arr[0]), BPF_NOEXIST);
+        // printf("update sockmap ret is %d\n", ret); 
+        // if (ret == -1) printf("errno is %s\n", strerror(errno)); 
+        // int key = i + CORE_NUMBER; 
+        // ret = bpf_map_update_elem(sockmap_fd, &key, &(sock_fd_arr[1]), BPF_NOEXIST);
+        // printf("update sockmap ret is %d\n", ret); 
+        // if (ret == -1) printf("errno is %s\n", strerror(errno)); 
 
         // set quic attribute 
         picoquic_set_cookie_mode(worker_quic[i], 2);

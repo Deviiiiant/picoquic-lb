@@ -1,48 +1,48 @@
 #include "migration_reuseport.h"
 
-int open_sockets(int local_port, int local_af, SOCKET_TYPE * s_socket, int * sock_af, int nb_sockets_max)
-{
-    int nb_sockets = (local_af == AF_UNSPEC) ? 2 : 1;
+// int open_sockets(int local_port, int local_af, SOCKET_TYPE * s_socket, int * sock_af, int nb_sockets_max)
+// {
+//     int nb_sockets = (local_af == AF_UNSPEC) ? 2 : 1;
 
-    /* Compute how many sockets are necessary */
-    if (nb_sockets > nb_sockets_max) {
-        DBG_PRINTF("Cannot open %d sockets, max set to %d\n", nb_sockets, nb_sockets_max);
-        nb_sockets = 0;
-    } else if (local_af == AF_UNSPEC) {
-        sock_af[0] = AF_INET;
-        sock_af[1] = AF_INET6;
-    }
-    else if (local_af == AF_INET || local_af == AF_INET6) {
-        sock_af[0] = local_af;
-    }
-    else {
-        DBG_PRINTF("Cannot open socket(AF=%d), unsupported AF\n", local_af);
-        nb_sockets = 0;
-    }
+//     /* Compute how many sockets are necessary */
+//     if (nb_sockets > nb_sockets_max) {
+//         DBG_PRINTF("Cannot open %d sockets, max set to %d\n", nb_sockets, nb_sockets_max);
+//         nb_sockets = 0;
+//     } else if (local_af == AF_UNSPEC) {
+//         sock_af[0] = AF_INET;
+//         sock_af[1] = AF_INET6;
+//     }
+//     else if (local_af == AF_INET || local_af == AF_INET6) {
+//         sock_af[0] = local_af;
+//     }
+//     else {
+//         DBG_PRINTF("Cannot open socket(AF=%d), unsupported AF\n", local_af);
+//         nb_sockets = 0;
+//     }
 
-    for (int i = 0; i < nb_sockets; i++) {
-        int recv_set = 0;
-        int send_set = 0;
-        int optval = 1; 
+//     for (int i = 0; i < nb_sockets; i++) {
+//         int recv_set = 0;
+//         int send_set = 0;
+//         int optval = 1; 
 
-        if ((s_socket[i] = socket(sock_af[i], SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET ||
-            picoquic_socket_set_ecn_options(s_socket[i], sock_af[i], &recv_set, &send_set) != 0 ||
-            picoquic_socket_set_pkt_info(s_socket[i], sock_af[i]) != 0 || setsockopt(s_socket[i], SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)) != 0 || 
-            (local_port != 0 && picoquic_bind_to_port(s_socket[i], sock_af[i], local_port) != 0)) {
-            DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", sock_af[i], local_port);
-            for (int j = 0; j < i; j++) {
-                if (s_socket[i] != INVALID_SOCKET) {
-                    SOCKET_CLOSE(s_socket[i]);
-                    s_socket[i] = INVALID_SOCKET;
-                }
-            }
-            nb_sockets = 0;
-            break;
-        }
-    }
+//         if ((s_socket[i] = socket(sock_af[i], SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET ||
+//             picoquic_socket_set_ecn_options(s_socket[i], sock_af[i], &recv_set, &send_set) != 0 ||
+//             picoquic_socket_set_pkt_info(s_socket[i], sock_af[i]) != 0 || setsockopt(s_socket[i], SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)) != 0 || 
+//             (local_port != 0 && picoquic_bind_to_port(s_socket[i], sock_af[i], local_port) != 0)) {
+//             DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", sock_af[i], local_port);
+//             for (int j = 0; j < i; j++) {
+//                 if (s_socket[i] != INVALID_SOCKET) {
+//                     SOCKET_CLOSE(s_socket[i]);
+//                     s_socket[i] = INVALID_SOCKET;
+//                 }
+//             }
+//             nb_sockets = 0;
+//             break;
+//         }
+//     }
 
-    return nb_sockets;
-}
+//     return nb_sockets;
+// }
 
 int packet_loop(picoquic_quic_t* quic,
     int local_port,
@@ -50,7 +50,7 @@ int packet_loop(picoquic_quic_t* quic,
     int dest_if,
     shared_context_t* shared_context, 
     int id, 
-    int sock_fd) 
+    int* sock_fd_arr) 
 {
     int ret = 0;
     uint64_t current_time = picoquic_get_quic_time(quic);
@@ -65,17 +65,17 @@ int packet_loop(picoquic_quic_t* quic,
     uint64_t loop_count_time = current_time;
     int nb_loops = 0;
     picoquic_connection_id_t log_cid;
-    SOCKET_TYPE s_socket[1] = {sock_fd};
+    SOCKET_TYPE* s_socket = sock_fd_arr;
     int sock_af[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
-    int nb_sockets = 1;
+    int nb_sockets = 2;
     uint16_t socket_port = (uint16_t)local_port;
     picoquic_cnx_t* last_cnx = NULL;
 
     memset(sock_af, 0, sizeof(sock_af));
 
-    if ((nb_sockets = open_sockets(local_port, local_af, s_socket, sock_af, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
-        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
-    }
+    // if ((nb_sockets = open_sockets(local_port, local_af, s_socket, sock_af, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
+    //     ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+    // }
 
     while (ret == 0) {
         int socket_rank = -1;
@@ -134,6 +134,7 @@ int packet_loop(picoquic_quic_t* quic,
                     ((struct sockaddr_in*) & addr_to)->sin_port = current_recv_port;
                 }
                 /* Submit the packet to the server */
+                printf("recv sth\n"); 
                 (void)picoquic_incoming_packet(quic, buffer,
                     (size_t)bytes_recv, (struct sockaddr*) & addr_from,
                     (struct sockaddr*) & addr_to, if_index_to, received_ecn,
@@ -153,20 +154,30 @@ int packet_loop(picoquic_quic_t* quic,
 
                 if (ret == 0 && send_length > 0) {
                     
-                    // SOCKET_TYPE send_socket = INVALID_SOCKET;
-                    // loop_count_time = current_time;
-                    // nb_loops = 0;
-                    // for (int i = 0; i < nb_sockets; i++) {
-                    //     if (sock_af[i] == peer_addr.ss_family) {
-                    //         send_socket = s_socket[i];
-                    //         break;
-                    //     }
-                    // }
-
-                    sock_ret = picoquic_send_through_socket(s_socket[0],
+                    SOCKET_TYPE send_socket = INVALID_SOCKET;
+                    loop_count_time = current_time;
+                    nb_loops = 0;
+                    for (int i = 0; i < nb_sockets; i++) {
+                        // if (sock_af[i] == peer_addr.ss_family) {
+                        //     send_socket = s_socket[i];
+                        //     break;
+                        // }
+                        if (peer_addr.ss_family == AF_INET){
+                            send_socket = s_socket[0];
+                        }
+                        else if (peer_addr.ss_family == AF_INET6){
+                            send_socket = s_socket[1];
+                        }
+                        else {
+                            printf("cannt recon protocol\n"); 
+                        }
+                    }
+                    printf("send sock is %d\n", send_socket); 
+                    sock_ret = picoquic_send_through_socket(send_socket,
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length, &sock_err);
-                    printf("worker %d is sending %d bytes\n", id, sock_ret); 
+                    printf("worker %d is sending %d bytes\n", id, sock_ret);
+                    printf("errno is %s\n", strerror(errno));  
                 }
                 else {
                     break;
@@ -468,7 +479,7 @@ void worker(void* worker_thread_attr) {
     shared_context_t* shared_context = worker_thread_para->shared_context; 
     int server_port = worker_thread_para->server_port;
     int id = worker_thread_para->id; 
-    int sock_fd = worker_thread_attr->sock_fd; 
+    int* sock_fd_arr = worker_thread_para->sock_fd_arr; 
 
-    packet_loop(quic, server_port, 0, 0, shared_context, id, sock_fd); 
+    packet_loop(quic, server_port, 0, 0, shared_context, id, sock_fd_arr); 
 }

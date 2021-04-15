@@ -547,6 +547,7 @@ int picoquic_sample_client(char const * server_name, int server_port, char const
     }
 
     /* Wait for packets */
+    printf("server family is %d\n", server_address.ss_family); 
     ret = picoquic_packet_loop(quic, 0, server_address.ss_family, 0, sample_client_loop_cb, &client_ctx);
 
     /* Done. At this stage, we could print out statistics, etc. */
