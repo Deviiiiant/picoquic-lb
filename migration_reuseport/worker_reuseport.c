@@ -1,54 +1,72 @@
 #include "migration_reuseport.h"
 
-// int open_sockets(int local_port, int local_af, SOCKET_TYPE * s_socket, int * sock_af, int nb_sockets_max)
-// {
-//     int nb_sockets = (local_af == AF_UNSPEC) ? 2 : 1;
 
-//     /* Compute how many sockets are necessary */
-//     if (nb_sockets > nb_sockets_max) {
-//         DBG_PRINTF("Cannot open %d sockets, max set to %d\n", nb_sockets, nb_sockets_max);
-//         nb_sockets = 0;
-//     } else if (local_af == AF_UNSPEC) {
-//         sock_af[0] = AF_INET;
-//         sock_af[1] = AF_INET6;
-//     }
-//     else if (local_af == AF_INET || local_af == AF_INET6) {
-//         sock_af[0] = local_af;
-//     }
-//     else {
-//         DBG_PRINTF("Cannot open socket(AF=%d), unsupported AF\n", local_af);
-//         nb_sockets = 0;
-//     }
+int migrate_connection(picoquic_cnx_t* connection_to_migrate, int server_b, shared_context_t* shared_context, int port){
+    
+    int ret = 0; 
+    picoquic_shallow_migrate(connection_to_migrate, shared_context->worker_quic[server_b]); 
+    int cntmap_fd = shared_context->cntmap_fd; 
+    ret = bpf_map_update_elem(cntmap_fd, &port, &server_b, BPF_ANY); 
+    if (ret == -1) {
+        printf("errno is %s\n", strerror(errno)); 
+    }
+    else {
+        printf("update success\n"); 
+    }
+    return ret; 
+}
 
-//     for (int i = 0; i < nb_sockets; i++) {
-//         int recv_set = 0;
-//         int send_set = 0;
-//         int optval = 1; 
+int open_sockets(int local_port, int local_af, SOCKET_TYPE * s_socket, int * sock_af, int nb_sockets_max)
+{
+    int nb_sockets = (local_af == AF_UNSPEC) ? 2 : 1;
 
-//         if ((s_socket[i] = socket(sock_af[i], SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET ||
-//             picoquic_socket_set_ecn_options(s_socket[i], sock_af[i], &recv_set, &send_set) != 0 ||
-//             picoquic_socket_set_pkt_info(s_socket[i], sock_af[i]) != 0 || setsockopt(s_socket[i], SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)) != 0 || 
-//             (local_port != 0 && picoquic_bind_to_port(s_socket[i], sock_af[i], local_port) != 0)) {
-//             DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", sock_af[i], local_port);
-//             for (int j = 0; j < i; j++) {
-//                 if (s_socket[i] != INVALID_SOCKET) {
-//                     SOCKET_CLOSE(s_socket[i]);
-//                     s_socket[i] = INVALID_SOCKET;
-//                 }
-//             }
-//             nb_sockets = 0;
-//             break;
-//         }
-//     }
+    /* Compute how many sockets are necessary */
+    if (nb_sockets > nb_sockets_max) {
+        DBG_PRINTF("Cannot open %d sockets, max set to %d\n", nb_sockets, nb_sockets_max);
+        nb_sockets = 0;
+    } else if (local_af == AF_UNSPEC) {
+        sock_af[0] = AF_INET;
+        sock_af[1] = AF_INET6;
+    }
+    else if (local_af == AF_INET || local_af == AF_INET6) {
+        sock_af[0] = local_af;
+    }
+    else {
+        DBG_PRINTF("Cannot open socket(AF=%d), unsupported AF\n", local_af);
+        nb_sockets = 0;
+    }
 
-//     return nb_sockets;
-// }
+    for (int i = 0; i < nb_sockets; i++) {
+        int recv_set = 0;
+        int send_set = 0;
+        int optval = 1; 
+
+        if ((s_socket[i] = socket(sock_af[i], SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET ||
+            picoquic_socket_set_ecn_options(s_socket[i], sock_af[i], &recv_set, &send_set) != 0 ||
+            picoquic_socket_set_pkt_info(s_socket[i], sock_af[i]) != 0 || setsockopt(s_socket[i], SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)) != 0 || 
+            (local_port != 0 && picoquic_bind_to_port(s_socket[i], sock_af[i], local_port) != 0)) {
+            DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", sock_af[i], local_port);
+            for (int j = 0; j < i; j++) {
+                if (s_socket[i] != INVALID_SOCKET) {
+                    SOCKET_CLOSE(s_socket[i]);
+                    s_socket[i] = INVALID_SOCKET;
+                }
+            }
+            nb_sockets = 0;
+            break;
+        }
+    }
+
+    return nb_sockets;
+}
 
 int packet_loop(picoquic_quic_t* quic,
     int local_port,
     int local_af,
     int dest_if,
-    shared_context_t* shared_context) 
+    shared_context_t* shared_context, 
+    int id, 
+    worker_thread_para_t* worker_thread_para) 
 {
     int ret = 0;
     uint64_t current_time = picoquic_get_quic_time(quic);
@@ -63,17 +81,32 @@ int packet_loop(picoquic_quic_t* quic,
     uint64_t loop_count_time = current_time;
     int nb_loops = 0;
     picoquic_connection_id_t log_cid;
-    SOCKET_TYPE* s_socket = sock_fd_arr;
+    SOCKET_TYPE s_socket[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
     int sock_af[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
-    int nb_sockets = 2;
+    int nb_sockets = 0;
     uint16_t socket_port = (uint16_t)local_port;
     picoquic_cnx_t* last_cnx = NULL;
 
+
     memset(sock_af, 0, sizeof(sock_af));
 
-    if ((nb_sockets = picoquic_packet_loop_open_sockets(local_port, local_af, s_socket, sock_af, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
+    if ((nb_sockets = open_sockets(local_port, local_af, s_socket, sock_af, PICOQUIC_PACKET_LOOP_SOCKETS_MAX)) == 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
+    worker_thread_para->sock_fd = s_socket; 
+
+    // attach socket to ebpf prog 
+    if (id == 0) {
+        ret = setsockopt(s_socket[0] ,SOL_SOCKET, SO_ATTACH_REUSEPORT_EBPF, &(shared_context->prog_fd), sizeof(shared_context->prog_fd)); 
+        // if (ret == 0) printf("bind socket to ebpf prog success\n"); 
+    }
+
+    // add sock fd to 
+    ret = bpf_map_update_elem(shared_context->sockmap_fd, &id, &s_socket[0], BPF_NOEXIST);
+    // printf("update sockmap ret is %d\n", ret); 
+    if (ret == -1) printf("errno is %s\n", strerror(errno)); 
+
+
 
     while (ret == 0) {
         int socket_rank = -1;
@@ -131,50 +164,74 @@ int packet_loop(picoquic_quic_t* quic,
                 else if (addr_to.ss_family == AF_INET) {
                     ((struct sockaddr_in*) & addr_to)->sin_port = current_recv_port;
                 }
+
+                // migrate here, only once when time out 
+                // if (*(shared_context->timer_flags[id]) == 1) {
+                //     picoquic_cnx_t * connection_to_migrate = quic->cnx_list;
+                //     if (connection_to_migrate != NULL){
+                //         printf("migrate flag is %d\n", connection_to_migrate->migrated_conntection);
+                //         while (connection_to_migrate->migrated_conntection != 1) {
+                //             connection_to_migrate = connection_to_migrate->next_in_table; 
+                //             if (connection_to_migrate == NULL) break; 
+                //         }
+                //         if (connection_to_migrate != NULL) {
+                //             struct sockaddr_in *src_addr = (struct sockaddr_in*) & addr_from;
+                //             int port = ntohs(src_addr->sin_port); 
+                //             // printf("port is %d\n", port); 
+                //             if (connection_to_migrate->callback_ctx!=NULL) {
+                //                 if ((((app_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag) == 1) {
+                //                     int next_server = (id + 1) % (shared_context->worker_num);    
+                //                     printf("migrate to %d\n", next_server); 
+                //                     connection_to_migrate->migrated_conntection = 1; 
+                //                     migrate_connection(connection_to_migrate, next_server, shared_context, port); 
+                //                     printf("server %d has migrated\n", id); 
+                //                     // set migration flag to 0, since we only migrate once 
+                //                     ((app_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag = 1; 
+                //                     *(shared_context->timer_flags[id]) = 0; 
+                //                 }
+                //             }
+                //         }
+                //     }
+                // }
+
+                // printf("server %d is processing\n", id); 
                 /* Submit the packet to the server */
-                printf("recv sth\n"); 
                 (void)picoquic_incoming_packet(quic, buffer,
                     (size_t)bytes_recv, (struct sockaddr*) & addr_from,
                     (struct sockaddr*) & addr_to, if_index_to, received_ecn,
-                    current_time);
+                    current_time); 
+                // printf("server %d is receiving\n", id); 
             }
 
             while (ret == 0) {
                 struct sockaddr_storage peer_addr;
                 struct sockaddr_storage local_addr;
                 int if_index = dest_if;
-                int sock_ret = 0;
+                // int sock_ret = 0;
                 int sock_err = 0;
+
 
                 ret = picoquic_prepare_next_packet(quic, loop_time,
                     send_buffer, sizeof(send_buffer), &send_length,
                     &peer_addr, &local_addr, &if_index, &log_cid, &last_cnx);
 
                 if (ret == 0 && send_length > 0) {
-                    
                     SOCKET_TYPE send_socket = INVALID_SOCKET;
                     loop_count_time = current_time;
                     nb_loops = 0;
                     for (int i = 0; i < nb_sockets; i++) {
-                        // if (sock_af[i] == peer_addr.ss_family) {
-                        //     send_socket = s_socket[i];
-                        //     break;
-                        // }
-                        if (peer_addr.ss_family == AF_INET){
-                            send_socket = s_socket[0];
-                        }
-                        else if (peer_addr.ss_family == AF_INET6){
-                            send_socket = s_socket[1];
-                        }
-                        else {
-                            printf("cannt recon protocol\n"); 
+                        if (sock_af[i] == peer_addr.ss_family) {
+                            send_socket = s_socket[i];
+                            break;
                         }
                     }
-                    printf("send sock is %d\n", send_socket); 
-                    sock_ret = picoquic_send_through_socket(send_socket,
+
+                    picoquic_send_through_socket(send_socket,
                         (struct sockaddr*) & peer_addr, (struct sockaddr*) & local_addr, if_index,
                         (const char*)send_buffer, (int)send_length, &sock_err);
-                    printf("socket return is %d\n", sock_ret); 
+
+                    // printf("worker %d is sending \n", id); 
+                    
                 }
                 else {
                     break;
@@ -191,54 +248,42 @@ int packet_loop(picoquic_quic_t* quic,
     }
 
     /* Close the sockets */
-    // for (int i = 0; i < nb_sockets; i++) {
-    //     if (s_socket[i] != INVALID_SOCKET) {
-    //         SOCKET_CLOSE(s_socket[i]);
-    //         s_socket[i] = INVALID_SOCKET;
-    //     }
-    // }
+    for (int i = 0; i < nb_sockets; i++) {
+        if (s_socket[i] != INVALID_SOCKET) {
+            SOCKET_CLOSE(s_socket[i]);
+            s_socket[i] = INVALID_SOCKET;
+        }
+    }
 
     return ret;
 } 
 
-void sample_server_delete_stream_context_for_migration(app_ctx_t* server_ctx, stream_ctx_t* stream_ctx)
+stream_ctx_t * sample_server_create_stream_context(app_ctx_t* server_ctx, uint64_t stream_id)
 {
-    /* Close the file if it was open */
-    if (stream_ctx->F != NULL) {
-        stream_ctx->F = picoquic_file_close(stream_ctx->F);
+    stream_ctx_t* stream_ctx = (stream_ctx_t*)malloc(sizeof(stream_ctx_t));
+    // printf("stream ctx size is %ld\n", sizeof(stream_ctx_t)); 
+
+    if (stream_ctx != NULL) {
+        memset(stream_ctx, 0, sizeof(stream_ctx_t));
+
+        if (server_ctx->last_stream == NULL) {
+            // printf("insert a new ctx to empty list\n"); 
+            server_ctx->last_stream = stream_ctx;
+            server_ctx->first_stream = stream_ctx;
+        }
+        else {
+            // printf("list is not empty, attach ctx to tail\n"); 
+            stream_ctx->previous_stream = server_ctx->last_stream;
+            server_ctx->last_stream->next_stream = stream_ctx;
+            server_ctx->last_stream = stream_ctx;
+        }
+        stream_ctx->stream_id = stream_id;
     }
 
-    /* Remove the context from the server's list */
-    if (stream_ctx->previous_stream == NULL) {
-        server_ctx->first_stream = stream_ctx->next_stream;
-    }
-    else {
-        stream_ctx->previous_stream->next_stream = stream_ctx->next_stream;
-    }
-
-    if (stream_ctx->next_stream == NULL) {
-        server_ctx->last_stream = stream_ctx->previous_stream;
-    }
-    else {
-        stream_ctx->next_stream->previous_stream = stream_ctx->previous_stream;
-    }
-
-    /* release the memory */
-    free(stream_ctx);
+    return stream_ctx;
 }
 
-void sample_server_delete_context_for_migration(app_ctx_t* server_ctx)
-{
-    /* Delete any remaining stream context */
-    while (server_ctx->first_stream != NULL) {
-        sample_server_delete_stream_context_for_migration(server_ctx, server_ctx->first_stream);
-    }
-
-    /* release the memory */
-    free(server_ctx);
-}
-
-int sample_server_open_stream_for_migration(app_ctx_t* server_ctx, stream_ctx_t* stream_ctx)
+int sample_server_open_stream(app_ctx_t* server_ctx, stream_ctx_t* stream_ctx)
 {
     int ret = 0;
     char file_path[1024];
@@ -291,26 +336,42 @@ int sample_server_open_stream_for_migration(app_ctx_t* server_ctx, stream_ctx_t*
     return ret;
 }
 
-stream_ctx_t * sample_server_create_stream_context_for_migration(app_ctx_t* server_ctx, uint64_t stream_id)
+void sample_server_delete_stream_context(app_ctx_t* server_ctx, stream_ctx_t* stream_ctx)
 {
-    stream_ctx_t* stream_ctx = (stream_ctx_t*)malloc(sizeof(stream_ctx_t));
-
-    if (stream_ctx != NULL) {
-        memset(stream_ctx, 0, sizeof(stream_ctx_t));
-
-        if (server_ctx->last_stream == NULL) {
-            server_ctx->last_stream = stream_ctx;
-            server_ctx->first_stream = stream_ctx;
-        }
-        else {
-            stream_ctx->previous_stream = server_ctx->last_stream;
-            server_ctx->last_stream->next_stream = stream_ctx;
-            server_ctx->last_stream = stream_ctx;
-        }
-        stream_ctx->stream_id = stream_id;
+    // printf("delete stream ctx\n"); 
+    /* Close the file if it was open */
+    if (stream_ctx->F != NULL) {
+        stream_ctx->F = picoquic_file_close(stream_ctx->F);
     }
 
-    return stream_ctx;
+    /* Remove the context from the server's list */
+    if (stream_ctx->previous_stream == NULL) {
+        server_ctx->first_stream = stream_ctx->next_stream;
+    }
+    else {
+        stream_ctx->previous_stream->next_stream = stream_ctx->next_stream;
+    }
+
+    if (stream_ctx->next_stream == NULL) {
+        server_ctx->last_stream = stream_ctx->previous_stream;
+    }
+    else {
+        stream_ctx->next_stream->previous_stream = stream_ctx->previous_stream;
+    }
+
+    /* release the memory */
+    free(stream_ctx);
+}
+
+void sample_server_delete_context(app_ctx_t* server_ctx)
+{
+    /* Delete any remaining stream context */
+    while (server_ctx->first_stream != NULL) {
+        sample_server_delete_stream_context(server_ctx, server_ctx->first_stream);
+    }
+
+    /* release the memory */
+    free(server_ctx);
 }
 
 int stream_callback(picoquic_cnx_t* cnx,
@@ -318,13 +379,19 @@ int stream_callback(picoquic_cnx_t* cnx,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
 {
     int ret = 0;
-    app_ctx_t* server_ctx= (app_ctx_t*)callback_ctx;
+    app_ctx_t* server_ctx = (app_ctx_t*)callback_ctx;
     stream_ctx_t* stream_ctx = (stream_ctx_t*)v_stream_ctx;
 
+        // fprintf(stderr, "CALLBACK %d\n",fin_or_event);
+    /* If this is the first reference to the connection, the application context is set
+     * to the default value defined for the server. This default value contains the pointer
+     * to the file directory in which all files are defined.
+     */
     if (callback_ctx == NULL || callback_ctx == picoquic_get_default_callback_context(picoquic_get_quic_ctx(cnx))) {
         server_ctx = (app_ctx_t *)malloc(sizeof(app_ctx_t));
         if (server_ctx == NULL) {
             /* cannot handle the connection */
+            fprintf(stderr, "Could not allocate memory\n");
             picoquic_close(cnx, PICOQUIC_ERROR_MEMORY);
             return -1;
         }
@@ -349,7 +416,7 @@ int stream_callback(picoquic_cnx_t* cnx,
             /* Data arrival on stream #x, maybe with fin mark */
             if (stream_ctx == NULL) {
                 /* Create and initialize stream context */
-                stream_ctx = sample_server_create_stream_context_for_migration(server_ctx, stream_id);
+                stream_ctx = sample_server_create_stream_context(server_ctx, stream_id);
             }
 
             if (stream_ctx == NULL) {
@@ -367,7 +434,9 @@ int stream_callback(picoquic_cnx_t* cnx,
 
                 if (length > available) {
                     /* Name too long: reset stream! */
-                    sample_server_delete_stream_context_for_migration(server_ctx, stream_ctx);
+                    sample_server_delete_stream_context(server_ctx, stream_ctx);
+
+                    fprintf(stderr, "Name too long!\n");
                     (void) picoquic_reset_stream(cnx, stream_id, PICOQUIC_SAMPLE_NAME_TOO_LONG_ERROR);
                 }
                 else {
@@ -381,7 +450,7 @@ int stream_callback(picoquic_cnx_t* cnx,
                         /* If fin, mark read, check the file, open it. Or reset if there is no such file */
                         stream_ctx->file_name[stream_ctx->name_length + 1] = 0;
                         stream_ctx->is_name_read = 1;
-                        stream_ret = sample_server_open_stream_for_migration(server_ctx, stream_ctx);
+                        stream_ret = sample_server_open_stream(server_ctx, stream_ctx);
 
                         if (stream_ret == 0) {
                             /* If data needs to be sent, set the context as active */
@@ -389,10 +458,14 @@ int stream_callback(picoquic_cnx_t* cnx,
                         }
                         else {
                             /* If the file could not be read, reset the stream */
-                            sample_server_delete_stream_context_for_migration(server_ctx, stream_ctx);
+                            fprintf(stderr, "Unknown file\n");
+                            sample_server_delete_stream_context(server_ctx, stream_ctx);
                             (void) picoquic_reset_stream(cnx, stream_id, stream_ret);
                         }
                     }
+                    memcpy(server_ctx->file_name, stream_ctx->file_name, 256*sizeof(uint8_t));
+                    if (server_ctx->migration_flag != 2)  server_ctx->migration_flag = 1;
+                   
                 }
             }
             break;
@@ -421,9 +494,8 @@ int stream_callback(picoquic_cnx_t* cnx,
 
                     if (nb_read != available) {
                         /* Error while reading the file */
-                        sample_server_delete_stream_context_for_migration(server_ctx, stream_ctx);
+                        sample_server_delete_stream_context(server_ctx, stream_ctx);
                         (void)picoquic_reset_stream(cnx, stream_id, PICOQUIC_SAMPLE_FILE_READ_ERROR);
-                        printf("reading file error\n"); 
                     }
                     else {
                         stream_ctx->file_sent += available;
@@ -439,7 +511,8 @@ int stream_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
             if (stream_ctx != NULL) {
                 /* Mark stream as abandoned, close the file, etc. */
-                sample_server_delete_stream_context_for_migration(server_ctx, stream_ctx);
+                fprintf(stderr, "Client reset\n");
+                sample_server_delete_stream_context(server_ctx, stream_ctx);
                 picoquic_reset_stream(cnx, stream_id, PICOQUIC_SAMPLE_FILE_CANCEL_ERROR);
             }
             break;
@@ -447,7 +520,8 @@ int stream_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_close: /* Received connection close */
         case picoquic_callback_application_close: /* Received application close */
             /* Delete the server application context */
-            sample_server_delete_context_for_migration(server_ctx);
+            // fprintf(stderr, "App close\n");
+            sample_server_delete_context(server_ctx);
             picoquic_set_callback(cnx, NULL, NULL);
             break;
         case picoquic_callback_version_negotiation:
@@ -457,16 +531,15 @@ int stream_callback(picoquic_cnx_t* cnx,
             /* This callback is never used. */
             break;
         case picoquic_callback_almost_ready:
-            break;
-            // time to migrate
-            
         case picoquic_callback_ready:
+            /* Check that the transport parameters are what the sample expects */
             break;
         default:
             /* unexpected */
             break;
         }
     }
+
     return ret;
 }
 
@@ -475,6 +548,7 @@ void worker(void* worker_thread_attr) {
     picoquic_quic_t* quic = worker_thread_para->quic;
     shared_context_t* shared_context = worker_thread_para->shared_context; 
     int server_port = worker_thread_para->server_port;
+    int id = worker_thread_para->id; 
 
-    packet_loop(quic, server_port, 0, 0, shared_context); 
+    packet_loop(quic, server_port, 0, 0, shared_context, id, worker_thread_para); 
 }

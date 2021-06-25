@@ -1,44 +1,51 @@
 #include "migration_reuseport.h"
-#include <bpf/bpf.h>
-#include <bpf/libbpf.h>
-#include <linux/bpf.h>
 
-int open_socket(int local_port, int sock_af) {
-    int recv_set = 0;
-    int send_set = 0;
-    int optval = 1; 
-
-    int sock_fd = socket(sock_af, SOCK_DGRAM, IPPROTO_UDP); 
-
-    assert(sock_fd > -1); 
-    picoquic_socket_set_ecn_options(sock_fd, sock_af, &recv_set, &send_set); 
-    picoquic_socket_set_pkt_info(sock_fd, sock_af); 
-    setsockopt(sock_fd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)); 
-    picoquic_bind_to_port(sock_fd, sock_af, local_port);
-
-    return sock_fd; 
+void timer(void* timer_attr) {
+    timer_thread_attr_t* timer_thread_attr = (timer_thread_attr_t*) timer_attr; 
+    sleep(timer_thread_attr->sleep_time); 
+    printf("time to migrate!\n"); 
+    for (int i = 0; i < timer_thread_attr->thread_num; i ++) {
+        *(timer_thread_attr->timer_flag[i]) = 1; 
+    }
 }
 
 
-int test_migration(int server_port, const char* server_cert, const char* server_key, const char* default_dir) { 
-    // todo : 
-    // 1. load bpf program 
-    // 2. create sockets 
-    // 3. add sockets to map 
-    // 4. pass map fd to threads 
+int test_migration(int server_port, const char* server_cert, const char* server_key, int core_number, const char* default_dir) { 
+
+    printf("something here"); 
+    int thread_number = core_number; 
+    int ret = 0; 
+    picoquic_quic_t* worker_quic[thread_number]; 
+    memset(worker_quic, 0, thread_number*sizeof(picoquic_quic_t*));
+    uint64_t current_time = 0;
+
+    //create thread paras and thraed obj 
+    // worker_thread_para_t* worker_thread_paras[core_number] = {NULL}; 
+    worker_thread_para_t* worker_thread_paras[thread_number]; 
+    memset(worker_thread_paras, 0, thread_number*sizeof(worker_thread_para_t*));
+    shared_context_t* shared_context = malloc(sizeof(shared_context_t)); 
+    pthread_t thread[thread_number]; 
+    pthread_t timer_thread; 
+
+    // initiate shared context 
+    /*todo:
+    1. load bpf prog 
+    2. find sockmap fd 
+    3. find cntmap fd 
+    4. pass fds to shared context  
+    */ 
+    // load bpf prog     
     struct bpf_prog_load_attr prog_load_attr= {0};
     prog_load_attr.prog_type = BPF_PROG_TYPE_SK_REUSEPORT;
     prog_load_attr.file = "bpf.o";
     // int err; 
     struct bpf_object* obj;
 
-    //1. load the bpf prog 
+    //This will be a number to reference the program
     int prog_fd;
-    if (bpf_prog_load_xattr(&prog_load_attr, &obj, &prog_fd)) {
-        error(1, errno, "can't load %s", prog_load_attr.file);
-    }
     struct bpf_program *prog;
     const char *prog_name = "sec/mybpf";
+    bpf_prog_load_xattr(&prog_load_attr, &obj, &prog_fd); 
     prog = bpf_object__find_program_by_title(obj, prog_name);
     assert(prog != 0);
     prog_fd = bpf_program__fd(prog);
@@ -58,28 +65,57 @@ int test_migration(int server_port, const char* server_cert, const char* server_
     cntmap_fd = bpf_map__fd(cntmap); 
     assert(cntmap_fd > -1); 
 
-    int ret = 0; 
-    picoquic_quic_t* worker_quic[CORE_NUMBER] = {NULL}; 
-    char const* qlog_dir = PICOQUIC_SAMPLE_SERVER_QLOG_DIR;
-    uint64_t current_time = 0;
+    // find core number map 
+    int core_number_map_fd; 
+    struct bpf_map *core_number_map;
+    core_number_map = bpf_object__find_map_by_name(obj, "core_number_map");
+    core_number_map_fd = bpf_map__fd(core_number_map); 
+    assert(core_number_map_fd > -1); 
+    // pass core number to bpf prog 
+    int one = 1; 
+    ret = bpf_map_update_elem(core_number_map_fd, &one, &thread_number, BPF_NOEXIST); 
+    if (ret < 0) printf("update core number map errno is %s\n", strerror(errno)); 
 
-    //create thread paras and thraed obj 
-    worker_thread_para_t* worker_thread_paras[CORE_NUMBER] = {NULL}; 
-    shared_context_t* shared_context = malloc(sizeof(shared_context_t)); 
-    pthread_t thread[CORE_NUMBER]; 
+    int rb_counter_map_fd; 
+    struct bpf_map *rb_counter_map;
+    rb_counter_map = bpf_object__find_map_by_name(obj, "rb_counter_map");
+    rb_counter_map_fd = bpf_map__fd(rb_counter_map); 
+    assert(rb_counter_map_fd > -1); 
+    // pass core number to bpf prog 
+    int zero = 0; 
+    ret = bpf_map_update_elem(rb_counter_map_fd, &one, &zero, BPF_NOEXIST); 
+    if (ret < 0) printf("update core number map errno is %s\n", strerror(errno)); 
+
+    // init timer flag 
+    int* timer_flags[thread_number]; 
+    memset(timer_flags, 0, thread_number*sizeof(int*)); 
+    for(int i = 0; i < thread_number; i ++) {
+        timer_flags[i] = malloc(sizeof(int)); 
+    }
+
+    current_time = picoquic_current_time(); 
+
     shared_context->cntmap_fd = cntmap_fd; 
+    shared_context->sockmap_fd = sockmap_fd; 
+    shared_context->prog_fd = prog_fd; 
     shared_context->worker_quic = worker_quic; 
+    shared_context->worker_num = core_number; 
+    shared_context->timer_flags = timer_flags; 
 
     // create worker thread 
-    int sock_fd_arr[2] = {}; 
-    for (size_t i = 0; i < CORE_NUMBER; i ++) { 
+    cpu_set_t cpuset; 
+    CPU_ZERO(&cpuset); 
+    for (int i = 0; i < thread_number; i ++) { 
         // create app context 
         app_ctx_t* app_ctx = malloc(sizeof(app_ctx_t)); 
         app_ctx->default_dir = default_dir; 
         app_ctx->default_dir_len = strlen(default_dir); 
+        app_ctx->first_stream = NULL; 
+        app_ctx->last_stream = NULL; 
+        app_ctx->migration_flag = -1; 
         worker_quic[i] = picoquic_create(8, server_cert, server_key, NULL, PICOQUIC_SAMPLE_ALPN,
         stream_callback, app_ctx, NULL, NULL, NULL, current_time, NULL, NULL, NULL, 0);
-        printf("create worker %ld quic success\n", i); 
+        printf("create worker %d quic success\n", i); 
         
         // create thread para
         worker_thread_paras[i] = malloc(sizeof(worker_thread_para_t)); 
@@ -88,42 +124,37 @@ int test_migration(int server_port, const char* server_cert, const char* server_
         worker_thread_paras[i]->server_port = server_port; 
         worker_thread_paras[i]->shared_context = shared_context; 
 
-        sock_fd_arr[0] = open_socket(server_port, AF_INET); 
-        // printf("sock fd is %d\n", sock_fd_arr[0]); 
-        sock_fd_arr[1] = open_socket(server_port, AF_INET6); 
-        // printf("sock fd is %d\n", sock_fd_arr[1]); 
-        worker_thread_paras[i]->sock_fd_arr = sock_fd_arr; 
-
-        // bind socket to bpf prog 
-        // if (i == 0) {
-        //     ret = setsockopt(sock_fd_arr[0], SOL_SOCKET, SO_ATTACH_REUSEPORT_EBPF, &prog_fd, sizeof(prog_fd)); 
-        //     if (ret == 0) printf("bind socket %ld to ebpf prog success\n", i); 
-        // }
-
-        // update sockmap 
-        // ret = bpf_map_update_elem(sockmap_fd, &i, &(sock_fd_arr[0]), BPF_NOEXIST);
-        // printf("update sockmap ret is %d\n", ret); 
-        // if (ret == -1) printf("errno is %s\n", strerror(errno)); 
-        // int key = i + CORE_NUMBER; 
-        // ret = bpf_map_update_elem(sockmap_fd, &key, &(sock_fd_arr[1]), BPF_NOEXIST);
-        // printf("update sockmap ret is %d\n", ret); 
-        // if (ret == -1) printf("errno is %s\n", strerror(errno)); 
-
         // set quic attribute 
         picoquic_set_cookie_mode(worker_quic[i], 2);
         picoquic_set_default_congestion_algorithm(worker_quic[i], picoquic_bbr_algorithm);
-        picoquic_set_qlog(worker_quic[i], qlog_dir);
-        picoquic_set_log_level(worker_quic[i], 1);
-        picoquic_set_key_log_file_from_env(worker_quic[i]);
+        // picoquic_set_qlog(worker_quic[i], qlog_dir);
+        // picoquic_set_log_level(worker_quic[i], 1);
+        // picoquic_set_key_log_file_from_env(worker_quic[i]);
 
         // initialize thread 
         pthread_create(&thread[i], NULL, (void* ) worker, worker_thread_paras[i]); 
-        printf("create worker %ld thread success\n", i); 
+        printf("create worker %d thread success\n", i); 
+
+        //set cpu affinity 
+        CPU_SET(i + 8, &cpuset); 
+        pthread_setaffinity_np(thread[i], sizeof(cpuset), &cpuset); 
     }
 
-    for (int i = 0; i < CORE_NUMBER; i++) {
+    // init timer thread attr 
+    timer_thread_attr_t* timer_attr = malloc(sizeof(timer_thread_attr_t)); 
+    timer_attr-> thread_num = thread_number; 
+    timer_attr->timer_flag = timer_flags; 
+    timer_attr->sleep_time = 5; 
+
+    pthread_create(&timer_thread, NULL, (void* ) timer, timer_attr); 
+
+    for (int i = 0; i < thread_number; i++) {
+        printf("create thread %d\n", i); 
         pthread_join(thread[i], NULL); 
     }
+    
+    pthread_join(timer_thread, NULL);
+    printf("timer thread create success\n");  
 
     printf("server exit\n"); 
     return ret; 
@@ -161,7 +192,8 @@ int main(int argc, char** argv)
         }
         else {
             int server_port = get_port(argv[0], argv[2]);
-            exit_code = test_migration(server_port, argv[3], argv[4], argv[5]);
+            int core_number = atoi(argv[5]); 
+            exit_code = test_migration(server_port, argv[3], argv[4], core_number, argv[6]);
         }
     }
     else

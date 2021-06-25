@@ -1,28 +1,22 @@
-#include <assert.h>
+
 #include <stdint.h>
 #include <stdio.h>
 #include <picoquic.h>
 #include "picoquic_internal.h"
 #include <picosocks.h>
-#include <errno.h>
-#include <error.h>
 #include <picoquic_utils.h>
 #include <autoqlog.h>
 #include "picosocks.h"
 #include <sys/socket.h>
 #include "picoquic_packet_loop.h"
-#include "hashmap.h"
 #include <pthread.h>
-
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
 #include <linux/bpf.h>
-#include<stdio.h>   //printf
-#include<string.h> //memset
-#include<stdlib.h> //exit(0);
-
-
-
+#include <assert.h>
+#include <errno.h>
+#include <signal.h>
+#include <stdlib.h>
 
 #define CORE_NUMBER 4
 #define LB_MODE 1
@@ -66,27 +60,37 @@ typedef struct st_stream_ctx_t {
 typedef struct st_app_ctx_t {
     char const* default_dir;
     size_t default_dir_len;
-    picoquic_quic_t* server_back;
+    // picoquic_quic_t* server_back;
     stream_ctx_t* first_stream;
     stream_ctx_t* last_stream;
+    int migration_flag; 
     uint8_t file_name[256];
 } app_ctx_t;
 
 // shared context
 typedef struct st_shared_context {
-    // struct hashmap_s* cnx_table; 
     int cntmap_fd; 
+    int sockmap_fd; 
+    int prog_fd; 
+    int worker_num; 
     picoquic_quic_t** worker_quic; 
+    int** timer_flags; 
 } shared_context_t; 
 
 // thread parameters
 typedef struct st_worker_thread_para {
     int id; 
-    int* sock_fd_arr; 
+    int* sock_fd; 
     picoquic_quic_t* quic; 
     int server_port; 
     shared_context_t* shared_context; 
 } worker_thread_para_t; 
+
+typedef struct st_timer_thread_attr {
+    int** timer_flag; 
+    int thread_num; 
+    int sleep_time; 
+} timer_thread_attr_t; 
 
 // main function 
 void worker(void* thread_paras); 
