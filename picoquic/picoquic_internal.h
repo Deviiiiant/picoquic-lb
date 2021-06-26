@@ -905,6 +905,7 @@ typedef struct st_picoquic_cnx_t {
     /* Proposed and negotiated version. Feature flags denote version dependent features */
     uint32_t proposed_version;
     int version_index;
+    int has_been_migrated; // 1 is true, 0 is false  
 
     /* Series of flags showing the state or choices of the connection */
     unsigned int is_0RTT_accepted : 1; /* whether 0-RTT is accepted */

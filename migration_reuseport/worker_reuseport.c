@@ -166,33 +166,33 @@ int packet_loop(picoquic_quic_t* quic,
                 }
 
                 // migrate here, only once when time out 
-                // if (*(shared_context->timer_flags[id]) == 1) {
-                //     picoquic_cnx_t * connection_to_migrate = quic->cnx_list;
-                //     if (connection_to_migrate != NULL){
-                //         printf("migrate flag is %d\n", connection_to_migrate->migrated_conntection);
-                //         while (connection_to_migrate->migrated_conntection != 1) {
-                //             connection_to_migrate = connection_to_migrate->next_in_table; 
-                //             if (connection_to_migrate == NULL) break; 
-                //         }
-                //         if (connection_to_migrate != NULL) {
-                //             struct sockaddr_in *src_addr = (struct sockaddr_in*) & addr_from;
-                //             int port = ntohs(src_addr->sin_port); 
-                //             // printf("port is %d\n", port); 
-                //             if (connection_to_migrate->callback_ctx!=NULL) {
-                //                 if ((((app_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag) == 1) {
-                //                     int next_server = (id + 1) % (shared_context->worker_num);    
-                //                     printf("migrate to %d\n", next_server); 
-                //                     connection_to_migrate->migrated_conntection = 1; 
-                //                     migrate_connection(connection_to_migrate, next_server, shared_context, port); 
-                //                     printf("server %d has migrated\n", id); 
-                //                     // set migration flag to 0, since we only migrate once 
-                //                     ((app_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag = 1; 
-                //                     *(shared_context->timer_flags[id]) = 0; 
-                //                 }
-                //             }
-                //         }
-                //     }
-                // }
+                if (*(shared_context->timer_flags[id]) == 1) {
+                    picoquic_cnx_t * connection_to_migrate = quic->cnx_list;
+                    if (connection_to_migrate != NULL){
+                        printf("migrate flag is %d\n", connection_to_migrate->has_been_migrated);
+                        while (connection_to_migrate->migrated_conntection != 1) {
+                            connection_to_migrate = connection_to_migrate->next_in_table; 
+                            if (connection_to_migrate == NULL) break; 
+                        }
+                        if (connection_to_migrate != NULL) {
+                            struct sockaddr_in *src_addr = (struct sockaddr_in*) & addr_from;
+                            int port = ntohs(src_addr->sin_port); 
+                            // printf("port is %d\n", port); 
+                            if (connection_to_migrate->callback_ctx!=NULL) {
+                                if ((((app_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag) == 1) {
+                                    int next_server = (id + 1) % (shared_context->worker_num);    
+                                    printf("migrate to %d\n", next_server); 
+                                    connection_to_migrate->has_been_migrated = 1; 
+                                    migrate_connection(connection_to_migrate, next_server, shared_context, port); 
+                                    printf("server %d has migrated\n", id); 
+                                    // set migration flag to 0, since we only migrate once 
+                                    ((app_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag = 1; 
+                                    *(shared_context->timer_flags[id]) = 0; 
+                                }
+                            }
+                        }
+                    }
+                }
 
                 // printf("server %d is processing\n", id); 
                 /* Submit the packet to the server */

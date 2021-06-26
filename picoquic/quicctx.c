@@ -3934,20 +3934,20 @@ int picoquic_shallow_migrate(picoquic_cnx_t* connection_to_migrate, picoquic_qui
         printf("OMMMMMMMMMMMMMMMMG\n");
     }
     picoquic_remove_cnx_from_list(connection_to_migrate);
-    // picoquic_remove_cnx_from_wake_list(connection_to_migrate);
+    picoquic_remove_cnx_from_wake_list(connection_to_migrate);
     //copy the data from the connection!
     connection_to_migrate->quic = new_server;
     picoquic_insert_cnx_in_list(new_server, connection_to_migrate);
     // update the wake time
     // connection_to_migrate->next_wake_time = picoquic_get_quic_time(new_server);
     // picoquic_insert_cnx_by_wake_time(new_server, connection_to_migrate);
-    // picoquic_local_cnxid_t* l_cid = connection_to_migrate->local_cnxid_first;
+    picoquic_local_cnxid_t* l_cid = connection_to_migrate->local_cnxid_first;
 
     picoquic_register_cnx_id(new_server, connection_to_migrate, l_cid);
 
 /* Register or update default address and reset secret */
     // picoquic_register_net_secret(cnx);
     picoquic_register_net_icid(connection_to_migrate);
-    // printf("shallow copy finished here\n");
+    printf("shallow copy finished here\n");
     return ret;
 }
