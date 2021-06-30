@@ -28,7 +28,7 @@ struct bpf_map_def SEC("maps") cntmap = {
 	.type = BPF_MAP_TYPE_HASH,
 	.key_size = sizeof(__u16),	        // packet identifier 
 	.value_size = sizeof(int),			// socket index 
-	.max_entries = 2048,
+	.max_entries = 65536,
 };
 
 struct bpf_map_def SEC("maps") core_number_map = {

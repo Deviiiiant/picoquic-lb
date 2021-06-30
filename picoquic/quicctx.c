@@ -3933,7 +3933,7 @@ int picoquic_shallow_migrate(picoquic_cnx_t* connection_to_migrate, picoquic_qui
     if(connection_to_migrate == NULL) {
         printf("OMMMMMMMMMMMMMMMMG\n");
     }
-    picoquic_remove_cnx_from_list(connection_to_migrate);
+    // picoquic_remove_cnx_from_list(connection_to_migrate); 
     picoquic_remove_cnx_from_wake_list(connection_to_migrate);
     //copy the data from the connection!
     connection_to_migrate->quic = new_server;

@@ -12,7 +12,7 @@ sample client:
     sudo ./picoquic_sample client 127.0.0.1 4433 . 1MB
 
 wrk: 
-    salloc --nodelist=nslrack12 sudo taskset -c 0-15 ./wrk --timeout 5 -t 16 -c 20 -d 10 http://192.168.200.11:4433/1MB -L -U -q --http -1 
+    salloc --nodelist=nslrack12 sudo taskset -c 0-15 ./wrk --timeout 5 -t 16 -c 100 -d 10 http://192.168.200.11:4433/1MB -L -U -q --http -1 
 
 IPs: 
     nslrack11: 192.168.200.11

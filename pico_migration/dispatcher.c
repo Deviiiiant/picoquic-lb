@@ -167,7 +167,7 @@ int dispatcher_packet_loop(picoquic_quic_t* quic,
                             break;
                         }
                         printf("first migrated to the back-up server %d!!\n", *target_server);
-                        picoquic_shallow_migrate(quic, worker_quic[*target_server]);
+                        picoquic_shallow_migrate(connection_to_migrate, worker_quic[*target_server]);
                         picoquic_addr_text((struct sockaddr *)&connection_to_migrate->path[0]->peer_addr, key_string, 128);
                         if (cnx_id_table != NULL) {
                             hashmap_put(cnx_id_table, key_string, 128, (void *)target_server);
@@ -191,7 +191,7 @@ int dispatcher_packet_loop(picoquic_quic_t* quic,
                     int next_target_server_number = (target_server_number + 1) % CORE_NUMBER; 
                     hashmap_put(cnx_id_table, key, 128, (void*) &next_target_server_number); 
                     // migrate connection context 
-                    picoquic_shallow_migrate(worker_quic[target_server_number], worker_quic[next_target_server_number]); 
+                    // picoquic_shallow_migrate(worker_quic[target_server_number], worker_quic[next_target_server_number]); 
                     
                 }
 
