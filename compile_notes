@@ -13,7 +13,7 @@ wrk:
 sample client: 
     sudo ./picoquic_sample client 192.168.200.11 4433 . 1MB
     sudo ./picoquic_sample client 127.0.0.1 4433 . 1MB
-
+    
 gdb: 
     sudo -E LD_LIBRARY_PATH=/home/zhe/libbpf/src gdb ./reuesport_migration
     run server 4433 certs/cert.pem certs/key.pem 4 certs/
@@ -45,6 +45,9 @@ perf:
     sudo perf record -a -g --cpu 14-14 sleep 2
     sudo perf record -a -g --cpu 14-16 sleep 2
 
+
+dd file: 
+    dd if=/dev/zero of=1MB bs=1MB count=1
 
 
     

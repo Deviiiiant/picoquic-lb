@@ -68,7 +68,8 @@ typedef struct st_app_ctx_t {
 } app_ctx_t;
 
 typedef struct st_cnx_node {
-    picoquic_cnx_t* cnx, next, previous; 
+    struct st_cnx_node *next, *previous; 
+    picoquic_cnx_t* cnx; 
 } cnx_node_t; 
 
 // per server, a pipe used to thread-safty migrate context 
@@ -76,7 +77,7 @@ typedef struct st_context_pipe {
     cnx_node_t* first_cnx; 
     cnx_node_t* last_cnx; 
     int size; 
-    pthread_mutex_t* list_mutex; 
+    pthread_mutex_t list_mutex; 
 } context_pipe_t; 
 
 // shared context
