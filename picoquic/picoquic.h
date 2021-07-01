@@ -973,7 +973,9 @@ uint64_t picoquic_lb_compat_cid_verify(picoquic_quic_t* quic, void* cnx_id_cb_da
 
 void picoquic_set_cnx_id_callback(picoquic_quic_t* quic, picoquic_connection_id_cb_fn fn, void* ctx);
 
-int picoquic_shallow_migrate(picoquic_cnx_t* connection_to_migrate, picoquic_quic_t* new_server);
+// int picoquic_shallow_migrate(picoquic_cnx_t* connection_to_migrate, picoquic_quic_t* new_server);
+int delete_cnx_from_list(picoquic_cnx_t* connection_to_migrate); 
+int insert_cnx_to_list(picoquic_cnx_t* connection_to_migrate, picoquic_quic_t* quic); 
 #ifdef __cplusplus
 }
 #endif

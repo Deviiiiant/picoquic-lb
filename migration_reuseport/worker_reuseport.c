@@ -1,5 +1,33 @@
 #include "migration_reuseport.h"
 
+int consume_context_pipe(context_pipe_t* cnx_pipe, picoquic_quic_t* quic){
+    pthread_mutex_lock(cnx_pipe->list_mutex); 
+    /* check if the pipe is empty */
+    if (cnx_pipe->size == 0) {
+        pthread_mutex_unlock(cnx_pipe->list_mutex); 
+    }
+    else {
+        while(cnx_pipe->size != 0) {
+            cnx_node_t* migrated_node = cnx_pipe->first_cnx; 
+            // list size > 1
+            if (migrated_node->next != NULL) {
+                cnx_pipe->first_cnx = migrated_node->next; 
+                cnx_pipe->first_cnx->previous = NULL; 
+            }
+            // list size = 1
+            else {
+                cnx->first_cnx = NULL; 
+                cnx->last_cnx = NULL; 
+            }
+
+            insert_cnx_to_list(migrated_node->cnx, quic); 
+            free(migrated_node); 
+            cnx_pipe->size --; 
+        }
+        pthread_mutex_unlock(cnx_pipe->list_mutex); 
+    }
+}
+
 static void* picoquic_wake_list_node_value(picosplay_node_t* cnx_wake_node)
 {
     return (cnx_wake_node == NULL)?NULL:(void*)((char*)cnx_wake_node - offsetof(struct st_picoquic_cnx_t, cnx_wake_node));
@@ -9,7 +37,31 @@ static void* picoquic_wake_list_node_value(picosplay_node_t* cnx_wake_node)
 int migrate_connection(picoquic_cnx_t* connection_to_migrate, int server_b, shared_context_t* shared_context, int port){
     
     int ret = 0; 
-    picoquic_shallow_migrate(connection_to_migrate, shared_context->worker_quic[server_b]); 
+
+    context_pipe_t* cnx_pipe = shared_context->context_pipes[server_b]; 
+    pthread_mutex_lock(cnx_pipe->list_mutex); 
+    /* delete context from wake list and current list */
+    delete_cnx_from_list(connection_to_migrate); 
+    /* register local cnxid? */
+    picoquic_local_cnxid_t* l_cid = connection_to_migrate->local_cnxid_first;
+    picoquic_register_cnx_id(shared_context->worker_quic[server_b], connection_to_migrate, l_cid);
+    /* insert the context to the cnx pipe of the new server */
+    cnx_node_t* migrated_node; 
+    memset(migrated_node, 0, sizeof(cnx_node_t*)); 
+    migrated_node->cnx = connection_to_migrate; 
+    migrated_node->previous = NULL; 
+    migrated_node->next = NULL; 
+    if (cnx_pipe->size == 0) {
+        cnx_pipe->first_cnx = migrated_node; 
+        cnx_pipe->last_cnx = migrated_node; 
+    }
+    else {
+        migrated_node->previous = cnx_pipe->last_cnx; 
+        cnx_pipe->last_cnx->next = migrated_node; 
+        cnx_pipe->last_cnx = migrated_node; 
+    }
+    cnx_pipe->size ++; 
+    pthread_mutex_lock(cnx_pipe->list_mutex); 
     int cntmap_fd = shared_context->cntmap_fd; 
     ret = bpf_map_update_elem(cntmap_fd, &port, &server_b, BPF_ANY); 
     if (ret == -1) {
@@ -111,8 +163,6 @@ int packet_loop(picoquic_quic_t* quic,
     // printf("update sockmap ret is %d\n", ret); 
     if (ret == -1) printf("errno is %s\n", strerror(errno)); 
 
-
-
     while (ret == 0) {
         int socket_rank = -1;
         int64_t delta_t = picoquic_get_next_wake_delay(quic, current_time, delay_max);
@@ -170,36 +220,7 @@ int packet_loop(picoquic_quic_t* quic,
                     ((struct sockaddr_in*) & addr_to)->sin_port = current_recv_port;
                 }
 
-                // migrate here, only once when time out 
-                // if (*(shared_context->timer_flags[id]) == 1) {
-                //     picoquic_cnx_t * connection_to_migrate = quic->cnx_list;
-                //     if (connection_to_migrate != NULL){
-                //         while (connection_to_migrate->has_been_migrated != 0) {
-                //             connection_to_migrate = connection_to_migrate->next_in_table; 
-                //             if (connection_to_migrate == NULL) break; 
-                //         }
-                //         if (connection_to_migrate != NULL) {
-                //             struct sockaddr_in *src_addr = (struct sockaddr_in*) & addr_from;
-                //             int port = ntohs(src_addr->sin_port); 
-                //             // printf("port is %d\n", port); 
-                //             if (connection_to_migrate->callback_ctx!=NULL) {
-                //                 if ((((app_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag) == 1) {
-                //                     int next_server = (id + 1) % (shared_context->worker_num);   
-                //                     printf("migrate flag is %d\n", connection_to_migrate->has_been_migrated); 
-                //                     printf("migrate to %d\n", next_server); 
-                //                     connection_to_migrate->has_been_migrated = 1; 
-                //                     migrate_connection(connection_to_migrate, next_server, shared_context, port); 
-                //                     printf("server %d has migrated\n", id); 
-                //                     // set migration flag to 0, since we only migrate once 
-                //                     ((app_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag = 1; 
-                //                     *(shared_context->timer_flags[id]) = 0; 
-                //                 }
-                //             }
-                //         }
-                //     }
-                // }
-
-                // migrate from the wake list 
+                // migrate from the wake list, not thread safty! 
                 int number_to_migrate = 0; 
                 int migrate_counter = 0; 
                 if  (*(shared_context->timer_flags[id]) == 1) {
@@ -209,9 +230,6 @@ int packet_loop(picoquic_quic_t* quic,
                     *(shared_context->timer_flags[id]) = 0; 
                 }
 
-
-
-
                 if (number_to_migrate != 0) {
                     printf("%d connections are going to be migrated on server %d\n", number_to_migrate, id); 
                     for (int i = 0; i < number_to_migrate; i++) {
@@ -219,12 +237,9 @@ int packet_loop(picoquic_quic_t* quic,
                         if (connection_to_migrate != NULL) {
                             struct sockaddr_in *src_addr = (struct sockaddr_in*) & addr_from;
                             int port = ntohs(src_addr->sin_port); 
-                            // printf("port is %d\n", port); 
                             if (connection_to_migrate->callback_ctx!=NULL) {
                                 if ((((app_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag) == 1) {
                                     int next_server = (id + 1) % (shared_context->worker_num);   
-                                    // printf("migrate flag is %d\n", connection_to_migrate->has_been_migrated); 
-                                    // printf("migrate to %d\n", next_server); 
                                     connection_to_migrate->has_been_migrated = 1; 
                                     migrate_connection(connection_to_migrate, next_server, shared_context, port); 
                                     // set migration flag to 0, since we only migrate once 
@@ -236,12 +251,10 @@ int packet_loop(picoquic_quic_t* quic,
                             }
                         }
                     }
-
                 }
 
-                // migrate from the current conenction list 
+                consume_context_pipe(shared_context->context_pipes[id], quic); 
 
-                // printf("server %d is processing\n", id); 
                 /* Submit the packet to the server */
                 (void)picoquic_incoming_packet(quic, buffer,
                     (size_t)bytes_recv, (struct sockaddr*) & addr_from,

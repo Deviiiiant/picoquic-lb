@@ -220,28 +220,10 @@ target_link_libraries(picoquic_sample
 
 target_include_directories(picoquic_sample PRIVATE loglib picoquic)
 
-add_executable(migration
-    pico_migration/main.c 
-    pico_migration/dispatcher.c
-    pico_migration/worker.c
-)
-
-target_link_libraries(migration
-    picoquic-log
-    picoquic-core
-    ${PTLS_LIBRARIES}
-    ${OPENSSL_LIBRARIES}
-    ${CMAKE_DL_LIBS}
-    ${CMAKE_THREAD_LIBS_INIT}
-)
-
-target_include_directories(migration PRIVATE loglib picoquic)
-
 add_executable(reuesport_migration
     migration_reuseport/migration_sample.c
     migration_reuseport/worker_reuseport.c
 )
-
 
 target_link_libraries(reuesport_migration
     picoquic-log

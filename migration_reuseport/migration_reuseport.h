@@ -67,6 +67,18 @@ typedef struct st_app_ctx_t {
     uint8_t file_name[256];
 } app_ctx_t;
 
+typedef struct st_cnx_node {
+    picoquic_cnx_t* cnx, next, previous; 
+} cnx_node_t; 
+
+// per server, a pipe used to thread-safty migrate context 
+typedef struct st_context_pipe {
+    cnx_node_t* first_cnx; 
+    cnx_node_t* last_cnx; 
+    int size; 
+    pthread_mutex_t* list_mutex; 
+} context_pipe_t; 
+
 // shared context
 typedef struct st_shared_context {
     int cntmap_fd; 
@@ -75,6 +87,7 @@ typedef struct st_shared_context {
     int worker_num; 
     picoquic_quic_t** worker_quic; 
     int** timer_flags; 
+    context_pipe_t** context_pipes; 
 } shared_context_t; 
 
 // thread parameters
@@ -91,6 +104,8 @@ typedef struct st_timer_thread_attr {
     int thread_num; 
     int sleep_time; 
 } timer_thread_attr_t; 
+
+
 
 // main function 
 void worker(void* thread_paras); 

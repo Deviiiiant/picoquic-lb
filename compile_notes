@@ -7,12 +7,21 @@ compile bpf :
 run migration server: 
     salloc --nodelist=nslrack11 sudo -E LD_LIBRARY_PATH=/usr/lib64 ./reuesport_migration server 4433 certs/cert.pem certs/key.pem 4 certs/
 
+wrk: 
+    salloc --nodelist=nslrack12 sudo taskset -c 0-15 ./wrk --timeout 5 -t 16 -c 100 -d 10 http://192.168.200.11:4433/1MB -L -U -q --http -1 
+
 sample client: 
     sudo ./picoquic_sample client 192.168.200.11 4433 . 1MB
     sudo ./picoquic_sample client 127.0.0.1 4433 . 1MB
 
-wrk: 
-    salloc --nodelist=nslrack12 sudo taskset -c 0-15 ./wrk --timeout 5 -t 16 -c 100 -d 10 http://192.168.200.11:4433/1MB -L -U -q --http -1 
+gdb: 
+    sudo -E LD_LIBRARY_PATH=/home/zhe/libbpf/src gdb ./reuesport_migration
+    run server 4433 certs/cert.pem certs/key.pem 4 certs/
+
+restart slurm: 
+    sudo snap start slurm.munged 
+    sudo snap start slurm.slurmd
+    sudo scontrol update nodename=$(hostname) state=idle
 
 IPs: 
     nslrack11: 192.168.200.11
@@ -24,8 +33,6 @@ configure RSS queue:
     sudo ethtool -L cx6n0if1 combined N 
     sudo ethtool -L cx6n0if0 combined N 
 
-
-
 stop irq balance: 
     sudo service irqbalance stop
 
@@ -33,20 +40,10 @@ set affinity:
     sudo set_irq_affinity_bynode.sh 1 cx6n0if1
     sudo set_irq_affinity_bynode.sh 1 cx6n0if0
 
-
 perf: 
     sudo perf record -a -g --cpu 9-9 sleep 2
     sudo perf record -a -g --cpu 14-14 sleep 2
     sudo perf record -a -g --cpu 14-16 sleep 2
-
-restart slurm: 
-    sudo snap start slurm.munged 
-    sudo snap start slurm.slurmd
-    sudo scontrol update nodename=$(hostname) state=idle
-
-gdb: 
-    sudo -E LD_LIBRARY_PATH=/home/zhe/libbpf/src gdb ./reuesport_migration
-    run server 4433 certs/cert.pem certs/key.pem 4 certs/
 
 
 

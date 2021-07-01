@@ -93,7 +93,15 @@ int test_migration(int server_port, const char* server_cert, const char* server_
         timer_flags[i] = malloc(sizeof(int)); 
     }
 
-    current_time = picoquic_current_time(); 
+    // init context pipes 
+    context_pipe_t* context_pipes[thread_number]; 
+    memset(context_pipes, 0, thread_number * sizeof(context_pipe_t*));
+    for (int i = 0; i < thread_number; i ++) {
+        context_pipes[i]->size = 0; 
+        context_pipes[i]->array_mutex = PTHREAD_MUTEX_INITIALIZER; 
+        context_pipes[i]->first_cnx = NULL; 
+        context_pipes[i]->last_cnx = NULL; 
+    }
 
     shared_context->cntmap_fd = cntmap_fd; 
     shared_context->sockmap_fd = sockmap_fd; 
@@ -101,10 +109,13 @@ int test_migration(int server_port, const char* server_cert, const char* server_
     shared_context->worker_quic = worker_quic; 
     shared_context->worker_num = core_number; 
     shared_context->timer_flags = timer_flags; 
+    shared_context->context_pipes = 
 
     // create worker thread 
     cpu_set_t cpuset; 
     CPU_ZERO(&cpuset); 
+    current_time = picoquic_current_time(); 
+
     for (int i = 0; i < thread_number; i ++) { 
         // create app context 
         app_ctx_t* app_ctx = malloc(sizeof(app_ctx_t)); 
