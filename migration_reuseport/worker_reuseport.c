@@ -2,7 +2,6 @@
 
 int consume_context_pipe(context_pipe_t* cnx_pipe, picoquic_quic_t* quic){
     /* check if the pipe is empty */
-    printf("stuck???????\n")
     pthread_mutex_lock(&cnx_pipe->list_mutex); 
     if (cnx_pipe->size == 0) {
         pthread_mutex_unlock(&(cnx_pipe->list_mutex)); 
@@ -27,7 +26,6 @@ int consume_context_pipe(context_pipe_t* cnx_pipe, picoquic_quic_t* quic){
         }
         pthread_mutex_unlock(&(cnx_pipe->list_mutex)); 
     }
-printf("not stuck!!!!!!!\n");
     return 0; 
 }
 
@@ -70,7 +68,6 @@ int migrate_connection(picoquic_cnx_t* connection_to_migrate, int server_b, shar
         printf("errno is %s\n", strerror(errno)); 
     }
     else {
-        printf("update success\n"); 
     }
     return ret; 
 }
@@ -125,7 +122,9 @@ int packet_loop(picoquic_quic_t* quic,
     int dest_if,
     shared_context_t* shared_context, 
     int id, 
-    worker_thread_para_t* worker_thread_para) 
+    worker_thread_para_t* worker_thread_para, 
+    int mig_cnc_num
+    ) 
 {
     int ret = 0;
     uint64_t current_time = picoquic_get_quic_time(quic);
@@ -145,9 +144,8 @@ int packet_loop(picoquic_quic_t* quic,
     int nb_sockets = 0;
     uint16_t socket_port = (uint16_t)local_port;
     picoquic_cnx_t* last_cnx = NULL;
-    int number_to_migrate = 0; 
-    int migrate_counter = 0; 
-
+    int number_to_migrate = mig_cnc_num; 
+    int migration_counter = 0; 
 
     memset(sock_af, 0, sizeof(sock_af));
 
@@ -232,15 +230,15 @@ int packet_loop(picoquic_quic_t* quic,
                 // printf("server %d is receiving\n", id); 
             }
 
-            if  (*(shared_context->timer_flags[id]) == 1) {
-                int tree_size = quic->cnx_wake_tree.size; 
-                // let's migrate 0.1 of them? 
-                number_to_migrate = 0.1 * tree_size; 
-                *(shared_context->timer_flags[id]) = 0; 
-            }
+            // if  (*(shared_context->timer_flags[id]) == 1) {
+            //     int tree_size = quic->cnx_wake_tree.size; 
+            //     // let's migrate 0.1 of them? 
+            //     number_to_migrate = 0.1 * tree_size; 
+            //     *(shared_context->timer_flags[id]) = 0; 
+            //     printf("server %d got %d connections to migrated\n", id, number_to_migrate); 
+            // }
 
-            if (number_to_migrate != 0) {
-                printf("%d connections are going to be migrated on server %d\n", number_to_migrate, id); 
+            if (number_to_migrate != 0 && id == 0) {
                 for (int i = 0; i < number_to_migrate; i++) {
                     picoquic_cnx_t* connection_to_migrate = (picoquic_cnx_t *)picoquic_wake_list_node_value(quic->cnx_wake_tree.root);
                     if (connection_to_migrate != NULL) {
@@ -253,15 +251,12 @@ int packet_loop(picoquic_quic_t* quic,
                                 migrate_connection(connection_to_migrate, next_server, shared_context, port); 
                                 // set migration flag to 0, since we only migrate once 
                                 ((app_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag = 1; 
-                                number_to_migrate--; 
-                                migrate_counter++; 
-                                
+                                number_to_migrate --; 
+                                migration_counter ++;  
                             }
                         }
                     }
                 }
-                printf("server %d migrate %d connection\n", id, migrate_counter); 
-                printf("%d connections remains to be migrated on server %d\n", number_to_migrate, id); 
             }
 
             consume_context_pipe(shared_context->context_pipes[id], quic); 
@@ -612,6 +607,7 @@ void worker(void* worker_thread_attr) {
     shared_context_t* shared_context = worker_thread_para->shared_context; 
     int server_port = worker_thread_para->server_port;
     int id = worker_thread_para->id; 
+    int mig_cnc_num = worker_thread_para->mig_cnc_num; 
 
-    packet_loop(quic, server_port, 0, 0, shared_context, id, worker_thread_para); 
+    packet_loop(quic, server_port, 0, 0, shared_context, id, worker_thread_para, mig_cnc_num); 
 }

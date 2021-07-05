@@ -98,6 +98,7 @@ typedef struct st_worker_thread_para {
     picoquic_quic_t* quic; 
     int server_port; 
     shared_context_t* shared_context; 
+    int mig_cnc_num; 
 } worker_thread_para_t; 
 
 typedef struct st_timer_thread_attr {

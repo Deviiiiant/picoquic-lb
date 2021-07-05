@@ -5,10 +5,15 @@ compile bpf :
     sudo clang-10 -target bpf -Wall -O2 -c bpf.c -o bpf.o -g 
 
 run migration server: 
-    salloc --nodelist=nslrack11 sudo -E LD_LIBRARY_PATH=/usr/lib64 ./reuesport_migration server 4433 certs/cert.pem certs/key.pem 4 certs/
+    sudo -E LD_LIBRARY_PATH=/usr/lib64 ./reuesport_migration server 4433 certs/cert.pem certs/key.pem 2 certs/ 20
 
 wrk: 
-    salloc --nodelist=nslrack12 sudo taskset -c 0-15 ./wrk --timeout 5 -t 16 -c 100 -d 10 http://192.168.200.11:4433/1MB -L -U -q --http -1 
+    ./wrk --timeout 5 -t 16 -c 200 -d 6 http://192.168.200.11:4433/1MB -L -U -q --http -1 -R 1200
+
+
+flamegraph: 
+    
+
 
 sample client: 
     sudo ./picoquic_sample client 192.168.200.11 4433 . 1MB
@@ -41,9 +46,12 @@ set affinity:
     sudo set_irq_affinity_bynode.sh 1 cx6n0if0
 
 perf: 
-    sudo perf record -a -g --cpu 9-9 sleep 2
-    sudo perf record -a -g --cpu 14-14 sleep 2
-    sudo perf record -a -g --cpu 14-16 sleep 2
+    sudo perf record -F 9999 -a -g --cpu 9-9 sleep 2
+    sudo perf record -F 9999  -a -g  --cpu 9-9 sleep 2
+
+    perf script > out.perf 
+    ./stackcollapse-perf.pl out.perf > out.folded
+    ./flamegraph.pl out.folded > out.svg
 
 
 dd file: 

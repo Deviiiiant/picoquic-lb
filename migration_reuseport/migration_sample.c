@@ -10,7 +10,7 @@ void timer(void* timer_attr) {
 }
 
 
-int test_migration(int server_port, const char* server_cert, const char* server_key, int core_number, const char* default_dir) { 
+int test_migration(int server_port, const char* server_cert, const char* server_key, int core_number, const char* default_dir, int mig_cnc_num) { 
 
     printf("something here"); 
     int thread_number = core_number; 
@@ -135,6 +135,7 @@ int test_migration(int server_port, const char* server_cert, const char* server_
         worker_thread_paras[i]->quic = worker_quic[i]; 
         worker_thread_paras[i]->server_port = server_port; 
         worker_thread_paras[i]->shared_context = shared_context; 
+        worker_thread_paras[i]->mig_cnc_num = mig_cnc_num; 
 
         // set quic attribute 
         picoquic_set_cookie_mode(worker_quic[i], 2);
@@ -205,7 +206,8 @@ int main(int argc, char** argv)
         else {
             int server_port = get_port(argv[0], argv[2]);
             int core_number = atoi(argv[5]); 
-            exit_code = test_migration(server_port, argv[3], argv[4], core_number, argv[6]);
+            int mig_cnc_num = atoi(argv[7]); 
+            exit_code = test_migration(server_port, argv[3], argv[4], core_number, argv[6], mig_cnc_num);
         }
     }
     else
