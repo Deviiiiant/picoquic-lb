@@ -68,7 +68,7 @@ typedef struct st_app_ctx_t {
 } app_ctx_t;
 
 typedef struct st_cnx_node {
-    struct st_cnx_node *next, *previous; 
+    struct st_cnx_node *next; 
     picoquic_cnx_t* cnx; 
 } cnx_node_t; 
 
@@ -76,7 +76,6 @@ typedef struct st_cnx_node {
 typedef struct st_context_pipe {
     cnx_node_t* first_cnx; 
     cnx_node_t* last_cnx; 
-    int size; 
     pthread_mutex_t list_mutex; 
 } context_pipe_t; 
 
@@ -116,4 +115,12 @@ void worker(void* thread_paras);
 int stream_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx); 
+
+/* queue operations */ 
+context_pipe_t* create_cnx_pipe(); 
+cnx_node_t* create_cnx_node(picoquic_cnx_t* cnx); 
+int is_pipe_empty(context_pipe_t* p); 
+void enqueue_cnx(context_pipe_t* p, picoquic_cnx_t* cnx); 
+picoquic_cnx_t* dequeue_cnx(context_pipe_t* p); 
+
 

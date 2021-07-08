@@ -3,29 +3,11 @@
 int consume_context_pipe(context_pipe_t* cnx_pipe, picoquic_quic_t* quic){
     /* check if the pipe is empty */
     pthread_mutex_lock(&cnx_pipe->list_mutex); 
-    if (cnx_pipe->size == 0) {
-        pthread_mutex_unlock(&(cnx_pipe->list_mutex)); 
+    while (!is_pipe_empty(cnx_pipe)) {
+        picoquic_cnx_t* cnx = dequeue_cnx(cnx_pipe); 
+        insert_cnx_to_list(cnx, quic); 
     }
-    else {
-        while(cnx_pipe->size != 0) {
-            cnx_node_t* migrated_node = cnx_pipe->first_cnx; 
-            // list size > 1
-            if (migrated_node->next != NULL) {
-                cnx_pipe->first_cnx = migrated_node->next; 
-                cnx_pipe->first_cnx->previous = NULL; 
-            }
-            // list size = 1
-            else {
-                cnx_pipe->first_cnx = NULL; 
-                cnx_pipe->last_cnx = NULL; 
-            }
-
-            insert_cnx_to_list(migrated_node->cnx, quic); 
-            free(migrated_node); 
-            cnx_pipe->size --; 
-        }
-        pthread_mutex_unlock(&(cnx_pipe->list_mutex)); 
-    }
+    pthread_mutex_unlock(&(cnx_pipe->list_mutex)); 
     return 0; 
 }
 
@@ -41,33 +23,15 @@ int migrate_connection(picoquic_cnx_t* connection_to_migrate, int server_b, shar
 
     context_pipe_t* cnx_pipe = shared_context->context_pipes[server_b]; 
     pthread_mutex_lock(&cnx_pipe->list_mutex); 
-    /* delete context from wake list and current list */
+    // /* delete context from wake list and current list */
     delete_cnx_from_list(connection_to_migrate); 
-    /* register local cnxid? */
-    picoquic_local_cnxid_t* l_cid = connection_to_migrate->local_cnxid_first;
-    picoquic_register_cnx_id(shared_context->worker_quic[server_b], connection_to_migrate, l_cid);
-    /* insert the context to the cnx pipe of the new server */
-    cnx_node_t* migrated_node = malloc(sizeof(cnx_node_t)); 
-    migrated_node->cnx = connection_to_migrate; 
-    migrated_node->previous = NULL; 
-    migrated_node->next = NULL; 
-    if (cnx_pipe->size == 0) {
-        cnx_pipe->first_cnx = migrated_node; 
-        cnx_pipe->last_cnx = migrated_node; 
-    }
-    else {
-        migrated_node->previous = cnx_pipe->last_cnx; 
-        cnx_pipe->last_cnx->next = migrated_node; 
-        cnx_pipe->last_cnx = migrated_node; 
-    }
-    cnx_pipe->size ++; 
+    connection_to_migrate->quic = shared_context->worker_quic[server_b]; 
+    enqueue_cnx(cnx_pipe, connection_to_migrate); 
     pthread_mutex_unlock(&cnx_pipe->list_mutex); 
     int cntmap_fd = shared_context->cntmap_fd; 
     ret = bpf_map_update_elem(cntmap_fd, &port, &server_b, BPF_ANY); 
     if (ret == -1) {
         printf("errno is %s\n", strerror(errno)); 
-    }
-    else {
     }
     return ret; 
 }
@@ -146,6 +110,7 @@ int packet_loop(picoquic_quic_t* quic,
     picoquic_cnx_t* last_cnx = NULL;
     int number_to_migrate = mig_cnc_num; 
     int migration_counter = 0; 
+    int migration_recved = 0; 
 
     memset(sock_af, 0, sizeof(sock_af));
 
@@ -223,6 +188,7 @@ int packet_loop(picoquic_quic_t* quic,
                 }
 
                 /* Submit the packet to the server */
+                // printf("server %d is processing\n", id); 
                 (void)picoquic_incoming_packet(quic, buffer,
                     (size_t)bytes_recv, (struct sockaddr*) & addr_from,
                     (struct sockaddr*) & addr_to, if_index_to, received_ecn,
@@ -253,13 +219,17 @@ int packet_loop(picoquic_quic_t* quic,
                                 ((app_ctx_t *) (connection_to_migrate->callback_ctx))->migration_flag = 1; 
                                 number_to_migrate --; 
                                 migration_counter ++;  
+                                printf("%d connections have been migrated on %d\n", migration_counter, id); 
                             }
                         }
                     }
                 }
             }
 
-            consume_context_pipe(shared_context->context_pipes[id], quic); 
+            if (consume_context_pipe(shared_context->context_pipes[id], quic) == 0){
+                migration_recved++; 
+                printf("%d connectios recved!\n", migration_recved); 
+            } 
 
             while (ret == 0) {
                 struct sockaddr_storage peer_addr;

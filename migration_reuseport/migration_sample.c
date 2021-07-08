@@ -97,11 +97,7 @@ int test_migration(int server_port, const char* server_cert, const char* server_
     context_pipe_t* context_pipes[thread_number]; 
     memset(context_pipes, 0, thread_number * sizeof(context_pipe_t*));
     for (int i = 0; i < thread_number; i ++) {
-        context_pipes[i] = malloc(sizeof(context_pipe_t)); 
-        context_pipes[i]->size = 0; 
-        pthread_mutex_init(&(context_pipes[i]->list_mutex), NULL); 
-        context_pipes[i]->first_cnx = NULL; 
-        context_pipes[i]->last_cnx = NULL; 
+        context_pipes[i] = create_cnx_pipe(); 
     }
 
     shared_context->cntmap_fd = cntmap_fd; 

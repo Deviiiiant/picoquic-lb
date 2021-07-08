@@ -3959,9 +3959,12 @@ int delete_cnx_from_list(picoquic_cnx_t* connection_to_migrate) {
 }
 
 int insert_cnx_to_list(picoquic_cnx_t* connection_to_migrate, picoquic_quic_t* quic) {
+
+    picoquic_insert_cnx_in_list(quic, connection_to_migrate);
+    connection_to_migrate->next_wake_time = picoquic_get_quic_time(quic);
+    picoquic_insert_cnx_by_wake_time(quic, connection_to_migrate);
     picoquic_local_cnxid_t* l_cid = connection_to_migrate->local_cnxid_first;
     picoquic_register_cnx_id(quic, connection_to_migrate, l_cid);
-    picoquic_insert_cnx_in_list(quic, connection_to_migrate);
     picoquic_register_net_icid(connection_to_migrate);
     return 0; 
 }

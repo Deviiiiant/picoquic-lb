@@ -5,15 +5,17 @@ compile bpf :
     sudo clang-10 -target bpf -Wall -O2 -c bpf.c -o bpf.o -g 
 
 run migration server: 
-    sudo -E LD_LIBRARY_PATH=/usr/lib64 ./reuesport_migration server 4433 certs/cert.pem certs/key.pem 2 certs/ 20
+    sudo -E LD_LIBRARY_PATH=/usr/lib64 ./reuesport_migration server 4433 certs/cert.pem certs/key.pem 2 certs/ 80
 
 wrk: 
     ./wrk --timeout 5 -t 16 -c 200 -d 6 http://192.168.200.11:4433/1MB -L -U -q --http -1 -R 1200
 
+perf: 
+    sudo perf record -F 200 -r 80 -a -g --call-graph=dwarf --cpu 9-9 sleep 2
 
-flamegraph: 
-    
-
+perf-class: 
+    sudo perf script > out.perf 
+    perf-class out.perf --map sample.map --no-output-failed
 
 sample client: 
     sudo ./picoquic_sample client 192.168.200.11 4433 . 1MB
@@ -21,7 +23,7 @@ sample client:
     
 gdb: 
     sudo -E LD_LIBRARY_PATH=/home/zhe/libbpf/src gdb ./reuesport_migration
-    run server 4433 certs/cert.pem certs/key.pem 4 certs/
+    run server 4433 certs/cert.pem certs/key.pem 4 certs/ 20 
 
 restart slurm: 
     sudo snap start slurm.munged 
@@ -47,9 +49,8 @@ set affinity:
 
 perf: 
     sudo perf record -F 9999 -a -g --cpu 9-9 sleep 2
-    sudo perf record -F 9999  -a -g  --cpu 9-9 sleep 2
 
-    perf script > out.perf 
+    sudo perf script > out.perf 
     ./stackcollapse-perf.pl out.perf > out.folded
     ./flamegraph.pl out.folded > out.svg
 

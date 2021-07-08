@@ -18,9 +18,12 @@ picoquic_retransmit_needed: QUIC stack
 picoquic_process_possible_ack_of_ack_frame: QUIC stack
 picoquic_get_next_wake_time: QUIC stack
 crypto|encrypt|decrypt|CRYPTO|OPENSSL_|ptls: Crypto
-picoquic_finalize_and_protect_packet: Crypto aesgcm: Crypto
+picoquic_finalize_and_protect_packet: Crypto 
+aesgcm: Crypto
 SHA256_Update: Crypto
 picoquic_aead_get_checksum_length : Crypto
 setup_traffic_protection: Crypto
 SHA256_Final: Crypto
 BN_|EC_ : Crypto
+consume_context_pipe : Migration
+migrate_connection : Migration
