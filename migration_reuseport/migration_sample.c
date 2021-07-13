@@ -27,13 +27,6 @@ int test_migration(int server_port, const char* server_cert, const char* server_
     pthread_t thread[thread_number]; 
     pthread_t timer_thread; 
 
-    // initiate shared context 
-    /*todo:
-    1. load bpf prog 
-    2. find sockmap fd 
-    3. find cntmap fd 
-    4. pass fds to shared context  
-    */ 
     // load bpf prog     
     struct bpf_prog_load_attr prog_load_attr= {0};
     prog_load_attr.prog_type = BPF_PROG_TYPE_SK_REUSEPORT;
@@ -98,8 +91,12 @@ int test_migration(int server_port, const char* server_cert, const char* server_
     memset(context_pipes, 0, thread_number * sizeof(context_pipe_t*));
     for (int i = 0; i < thread_number; i ++) {
         context_pipes[i] = create_cnx_pipe(); 
+        pthread_mutex_init(&(context_pipes[i]->list_mutex), NULL);
     }
 
+
+    /* bpf map mutex init */ 
+    pthread_mutex_init(&(shared_context->cnt_map_mutex), NULL);
     shared_context->cntmap_fd = cntmap_fd; 
     shared_context->sockmap_fd = sockmap_fd; 
     shared_context->prog_fd = prog_fd; 

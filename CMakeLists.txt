@@ -223,6 +223,7 @@ target_include_directories(picoquic_sample PRIVATE loglib picoquic)
 add_executable(reuesport_migration
     migration_reuseport/migration_sample.c
     migration_reuseport/worker_reuseport.c
+    migration_reuseport/queue.c
 )
 
 target_link_libraries(reuesport_migration

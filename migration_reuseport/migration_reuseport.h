@@ -83,6 +83,7 @@ typedef struct st_context_pipe {
 typedef struct st_shared_context {
     int cntmap_fd; 
     int sockmap_fd; 
+    pthread_mutex_t cnt_map_mutex; 
     int prog_fd; 
     int worker_num; 
     picoquic_quic_t** worker_quic; 

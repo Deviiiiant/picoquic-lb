@@ -30,9 +30,7 @@ void enqueue_cnx(context_pipe_t* p, picoquic_cnx_t* cnx) {
 }
 
 picoquic_cnx_t* dequeue_cnx(context_pipe_t* p) {
-    if (is_pipe_empty(p)) {
-        return; 
-    }
+    assert(!is_pipe_empty(p)); 
     cnx_node_t* first_node = p->first_cnx; 
     p->first_cnx = first_node->next; 
 

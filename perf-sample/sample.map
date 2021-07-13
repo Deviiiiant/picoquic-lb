@@ -27,3 +27,4 @@ SHA256_Final: Crypto
 BN_|EC_ : Crypto
 consume_context_pipe : Migration
 migrate_connection : Migration
+pthread_mutex_lock | pthread_mutex_unlock : Lock 

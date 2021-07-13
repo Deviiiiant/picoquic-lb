@@ -1,6 +1,12 @@
 password: 
     83JvOrzVznFj
 
+local path: 
+    /Users/dio/Documents/GitHub/picoquic-lb
+    
+remote path: 
+    /home/zhe/picolib/picoquic-lb
+
 compile bpf : 
     sudo clang-10 -target bpf -Wall -O2 -c bpf.c -o bpf.o -g 
 
@@ -11,7 +17,7 @@ wrk:
     ./wrk --timeout 5 -t 16 -c 200 -d 6 http://192.168.200.11:4433/1MB -L -U -q --http -1 -R 1200
 
 perf: 
-    sudo perf record -F 200 -r 80 -a -g --call-graph=dwarf --cpu 9-9 sleep 2
+    sudo perf record -F 2000 -r 80 -a -g --call-graph=dwarf  sleep 3
 
 perf-class: 
     sudo perf script > out.perf 
@@ -23,7 +29,7 @@ sample client:
     
 gdb: 
     sudo -E LD_LIBRARY_PATH=/home/zhe/libbpf/src gdb ./reuesport_migration
-    run server 4433 certs/cert.pem certs/key.pem 4 certs/ 20 
+    run server 4433 certs/cert.pem certs/key.pem 2 certs/ 80
 
 restart slurm: 
     sudo snap start slurm.munged 
@@ -37,8 +43,8 @@ read debug pipe:
     sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 configure RSS queue: 
-    sudo ethtool -L cx6n0if1 combined N 
-    sudo ethtool -L cx6n0if0 combined N 
+    sudo ethtool -L cx6n0if1 combined 2 
+    sudo ethtool -L cx6n0if0 combined 2
 
 stop irq balance: 
     sudo service irqbalance stop
@@ -57,6 +63,9 @@ perf:
 
 dd file: 
     dd if=/dev/zero of=1MB bs=1MB count=1
+
+
+
 
 
     
